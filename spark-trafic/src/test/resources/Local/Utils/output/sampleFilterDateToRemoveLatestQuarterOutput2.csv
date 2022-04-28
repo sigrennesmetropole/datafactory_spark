@@ -1,0 +1,5 @@
+date;segment;avgSpeed;travelTime;reliability;status
+2021-02-25 05:48:54;213974_D;40;5;0;freeFlow
+2021-02-25 14:33:12;213974_D;40;5;0;freeFlow
+2021-02-25 15:01:12;213973_G;92;4;35;freeFlow
+2021-02-25 15:22:00;213972_D;46;6;0;freeFlow

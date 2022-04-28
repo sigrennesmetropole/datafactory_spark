@@ -1,0 +1,4 @@
+code_producteur;id_rva;code_insee;commune;type_producteur;activite;latitude;longitude;date_photo;id_producteur
+26808;"80573";35238;"Rennes";"Non ménager";"Enseignement";"-1.7029322";"48.1230503";"20220209";10
+149145;"73563";35238;"Rennes";"Ménage";"Pavillon";"-1.6328418";"48.1274764";"20220209";12
+84960;;35238;"Rennes";"Ménage";"Pt de regroupement";"-1.63298593957";"48.1276565015";"20220209";15

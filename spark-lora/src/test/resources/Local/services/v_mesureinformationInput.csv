@@ -1,0 +1,9 @@
+channel,deveui,enabledon,disabledon,measurenatureid,unitid,dataparameter
+1,0018b21000002f1e,2021-07-01,,1,1,temperature 1
+2,0018b21000002f1e,2021-07-01,,2,1,temperature 2
+3,0018b22000003e90,2021-07-01,,1,1,temperature 1
+4,0018b22000003e90,2021-07-01,,2,1,temperature 2
+5,70b3d5e75e003dcd,2021-07-01,,3,2,PTCOUR1:HPE:EAP_s
+6,70b3d5e75e003dcd,2021-07-01,,5,2,PTCOUR1:HCE:EAP_s
+7,70b3d5e75e003dcd,2021-07-01,,4,2,PTCOUR1:HPE:EAP_i
+8,70b3d5e75e003dcd,2021-07-01,,6,2,PTCOUR1:HCE:EAP_i
