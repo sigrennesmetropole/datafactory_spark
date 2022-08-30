@@ -88,6 +88,7 @@ class UtilsTest {
   val DATE = "WrongDate"
   val nameEnv= "test"
   var dfInput = Utils.readData(spark, DATE,nameEnv)
+     dfInput.show()
     assertEquals(0, dfInput.count())
   }
 

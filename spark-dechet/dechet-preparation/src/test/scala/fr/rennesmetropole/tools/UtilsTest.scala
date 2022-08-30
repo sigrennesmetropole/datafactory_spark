@@ -47,8 +47,8 @@ class UtilsTest {
       )
     )
 
-  val DATE = "2021-01-01"
-    var dfInput = Utils.readData(spark, DATE, schemaInput, "READ_URL")
+  val DATE = "2022-01-01"
+    var dfInput = Utils.readData(spark, DATE, schemaInput, "env")
     var dfExpected = 
       spark
       .read
@@ -56,7 +56,9 @@ class UtilsTest {
       .format("csv") // "minioSelectJSON" for JSON or "minioSelectParquet" for Parquet
       .schema(schemaInput) // mandatory
       .option("delimiter", ";")
-      .load("src/test/resources/Local/utils/UtilsReadInput.csv")
+      .load("src/test/resources/Local/utils/year=2022/month=01/day=01/UtilsReadInput.csv")
+      dfInput.show(false)
+      dfExpected.show(false)
     assertEquals(0, dfInput.except(dfExpected).count())
   }
 
@@ -85,7 +87,7 @@ class UtilsTest {
     )
 
   val DATE = "WrongDate"
-  var dfInput = Utils.readData(spark, DATE, schemaInput, "READ_URL")
+  var dfInput = Utils.readData(spark, DATE, schemaInput, "env")
     assertEquals(0, dfInput.count())
   }
 

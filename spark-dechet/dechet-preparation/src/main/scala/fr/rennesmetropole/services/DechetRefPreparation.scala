@@ -22,6 +22,8 @@ object DechetRefPreparation {
     var df_imported = df_raw_producteur
     val schema = Utils.getSchema(nameEnv)
     var df_typed = spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
+    println("SCHEMA DF TYPED")
+    df_typed.printSchema
     if(Utils.tableVar(nameEnv,"header") == "False"){ // On regarde si la table possede un header
       //recuperation des parametres depuis le fichier de conf
       println("getMap" + nameEnv)
@@ -40,21 +42,20 @@ object DechetRefPreparation {
       df_imported = Utils.lowerCaseAllHeader(spark, df_imported)
     }
 
-    try{
-      df_imported.unionByName(df_typed)
-    }
-    catch {
-       case e : Throwable =>
-      println("ERROR : les donnees en entree n'ont pas les bonnes colonnes : " + e)
-      df_typed
-    }
+    // try{
+    //   df_imported = df_imported.unionByName(df_typed)
+    // }
+    // catch {
+    //    case e : Throwable =>
+    //   println("ERROR : les donnees en entree n'ont pas les bonnes colonnes : " + e)
+    //   df_typed
+    // }
       val df_prepared = nameEnv match {
       case "tableProducteur" => preparationProducteur(df_imported, df_typed) 
       case "tableRecipient" => preparationRecipent(df_imported, df_typed) 
       }
       println("DONNEES PREPARE")
-      df_prepared.printSchema()
-      df_prepared.show()
+      df_prepared.show
       df_prepared
   }
 
@@ -98,12 +99,16 @@ def preparationProducteur(df: DataFrame, df_typed :DataFrame): DataFrame = {
  */
 def preparationRecipent(df: DataFrame, df_typed :DataFrame): DataFrame = {
   try {
+    var df_temp = df
     println("TRY PREPARATION BAC")
       val toDouble = udf((s:String) =>UDF.udfToDouble(s))
       val toInt = udf((s:String) =>UDF.udfToInt(s))
-      val df_bac = df.withColumn("code_producteur", new Column(AssertNotNull(col("code_producteur").cast(IntegerType).expr)))
+      if(df.columns.contains("type_de_recipient")){
+        df_temp = df.withColumnRenamed("type_de_recipient","type_recipient")
+      }
+      val df_bac = df_temp.withColumn("code_producteur", new Column(AssertNotNull(col("code_producteur").cast(IntegerType).expr)))
           .withColumn("categorie_recipient", new Column(AssertNotNull(col("categorie_recipient").cast(StringType).expr)))
-          .withColumn("type_recipient", new Column(AssertNotNull(col("type_de_recipient").cast(StringType).expr)))
+          .withColumn("type_recipient", new Column(AssertNotNull(col("type_recipient").cast(StringType).expr)))
           .withColumn("litrage_recipient", new Column(AssertNotNull(col("litrage_recipient").cast(IntegerType).expr)))
           .withColumn("code_puce", new Column(AssertNotNull(col("code_puce").cast(StringType).expr)))
           .withColumn("frequence_om",when(col("frequence_om").isNotNull,

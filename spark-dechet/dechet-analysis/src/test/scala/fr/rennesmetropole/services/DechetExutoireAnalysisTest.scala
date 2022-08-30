@@ -22,15 +22,15 @@ class DechetExutoireAnalysisTest {
     val schemaInput = StructType(
       List(
         StructField("immat", StringType, false), //Immat. 
-        StructField("dateServiceVehic", StringType, true), //Date service véhic. 
-        StructField("codeTournee", IntegerType, true), //Description tournée 
-        StructField("kmRealise", IntegerType, false), //Km réalisé 
-        StructField("noBon", StringType, true), //noBon filtre pour doublon
+        StructField("date_Service_Vehic", StringType, true), //Date service véhic. 
+        StructField("code_Tournee", IntegerType, true), //Description tournée 
+        StructField("km_Realise", IntegerType, false), //Km réalisé 
+        StructField("no_Bon", StringType, true), //noBon filtre pour doublon
         StructField("lot", StringType, true), //LOT 
         StructField("service", IntegerType, false), //Service 
-        StructField("nomRechLieuDeVidage", StringType, true), //Nom rech. lieu de vidage 
-        StructField("multiplesLignes", DoubleType, true), //Nom multiples ligne 
-        StructField("cleUniqueLigneTicket", FloatType, true) //, //Clé unique Ligne ticket 
+        StructField("nom_Rech_Lieu_De_Vidage", StringType, true), //Nom rech. lieu de vidage 
+        StructField("multiples_Lignes", DoubleType, true), //Nom multiples ligne 
+        StructField("cle_Unique_Ligne_Ticket", FloatType, true) //, //Clé unique Ligne ticket 
         )
     )
     var dfInput =  spark
@@ -68,7 +68,7 @@ class DechetExutoireAnalysisTest {
       .schema(schemaOutput) // mandatory
       .option("delimiter", ";")
       .load("src/test/resources/Local/services/Exutoire/DechetExutoireAnalysisOutput.csv")
-    val dfOutput = DechetExutoireAnalysis.ExecuteDechetExutoireAnalysis(spark,dfInput,"2021-01-01")
+    val dfOutput = DechetExutoireAnalysis.ExecuteDechetExutoireAnalysis(spark,dfInput,"2021-01-01","false")
     assertEquals(0, dfOutput.except(dfExpected).count())
   }
 

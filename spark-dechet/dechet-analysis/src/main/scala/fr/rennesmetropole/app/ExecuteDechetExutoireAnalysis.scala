@@ -5,14 +5,26 @@ import fr.rennesmetropole.services.{DechetExutoireAnalysis, ImportDechetExutoire
 import fr.rennesmetropole.tools.Utils
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import java.time.Instant
+
 object ExecuteDechetExutoireAnalysis {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     val logger = Logger(getClass.getName)
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
-    var SYSDATE = java.time.LocalDate.now.toString
+    var SYSDATE = java.time.LocalDate.now.toString  
+    var reprise = "false"
     try {
       SYSDATE = args(0)
+      if(args.length>=2) {
+        reprise = args(1)
+        if (Utils.envVar("TEST_MODE") != "False" && args.length > 1) {
+          if (args(1).nonEmpty) {
+            DechetExutoireAnalysis.setNow(Instant.parse(args(1)))
+          }
+        }
+      }
     } catch {
+
       case e: Throwable => {
         println("Des arguments manquent")
         println("Commande lancée :")
@@ -50,7 +62,7 @@ object ExecuteDechetExutoireAnalysis {
       val df_ImportDechetExutoire = ImportDechetExutoire.ExecuteImportDechetExutoire(spark, SYSDATE, nameEnv)
       println("IMPORT DECHET Donnee exutoires")
       df_ImportDechetExutoire.show(false)
-      val df_AnalysedDechetExutoire = DechetExutoireAnalysis.ExecuteDechetExutoireAnalysis(spark, df_ImportDechetExutoire,SYSDATE)
+      val df_AnalysedDechetExutoire = DechetExutoireAnalysis.ExecuteDechetExutoireAnalysis(spark, df_ImportDechetExutoire,SYSDATE,reprise)
       println("ANALYSED DECHET Donnee exutoires")
       df_AnalysedDechetExutoire.show(false)
 

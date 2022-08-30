@@ -17,10 +17,10 @@ class ImportDechetTest {
   spark.sparkContext.setLogLevel("WARN")
 
 
- /* @Test
+  @Test
   def readFromMinioTest(): Unit = {
-    var DATE = java.time.LocalDate.now.toString
-    var dfInput = ImportDechet.ExecuteImportDechet(spark, DATE)
+    var DATE = "2022-01-01"
+    var dfInput = ImportDechet.ExecuteImportDechet(spark, DATE,"tableCollecte")
 
     val schemaExpected = StructType(
       
@@ -32,15 +32,15 @@ class ImportDechetTest {
         StructField("Statut_de_la_levee", IntegerType, false),
         StructField("Latitude", DoubleType, true),
         StructField("Longitude", DoubleType, true),
-        StructField("Bouton_poussoir_1", DoubleType, true),
-        StructField("Bouton_poussoir_2", DoubleType, true),
-        StructField("Bouton_poussoir_3", DoubleType, true),
-        StructField("Bouton_poussoir_4", DoubleType, true),
-        StructField("Bouton_poussoir_5", DoubleType, true),
-        StructField("Bouton_poussoir_6", DoubleType, true)
-        //StructField("Statut bac", StringType, true),
-        //StructField("Tournee", StringType, true),
-        //StructField("Immatriculation ", StringType, true)
+        StructField("Bouton_poussoir_1", IntegerType, true),
+        StructField("Bouton_poussoir_2", IntegerType, true),
+        StructField("Bouton_poussoir_3", IntegerType, true),
+        StructField("Bouton_poussoir_4", IntegerType, true),
+        StructField("Bouton_poussoir_5", IntegerType, true),
+        StructField("Bouton_poussoir_6", IntegerType, true),
+        StructField("Statut_du_bac", StringType, true),
+        StructField("Immatriculation", StringType, true),
+        StructField("Tournee", StringType, true)
       )
     )
 
@@ -51,13 +51,16 @@ class ImportDechetTest {
       .schema(schemaExpected) // mandatory
       .option("delimiter", ";")
       .load("src/test/resources/Local/services/ReadFromMinioTestExpected.csv")
-    assertEquals(dfInput.except(dfExpected).count(), 0)
+      dfInput.show(false)
+      dfExpected.show(false)
+      
+    assertEquals(0,dfInput.except(dfExpected).count())
   }
 
   @Test
   def ExecuteImportDechetTest(): Unit = {
-    var DATE = java.time.LocalDate.now.toString
-    var dfInput = ImportDechet.ExecuteImportDechet(spark, DATE)
+    var DATE = "2022-01-01"
+    var dfInput = ImportDechet.ExecuteImportDechet(spark, DATE,"tableCollecte")
 
     val schemaExpected = StructType(
       
@@ -69,15 +72,15 @@ class ImportDechetTest {
         StructField("Statut_de_la_levee", IntegerType, false),
         StructField("Latitude", DoubleType, true),
         StructField("Longitude", DoubleType, true),
-        StructField("Bouton_poussoir_1", DoubleType, true),
-        StructField("Bouton_poussoir_2", DoubleType, true),
-        StructField("Bouton_poussoir_3", DoubleType, true),
-        StructField("Bouton_poussoir_4", DoubleType, true),
-        StructField("Bouton_poussoir_5", DoubleType, true),
-        StructField("Bouton_poussoir_6", DoubleType, true)
-        //StructField("Statut bac", StringType, true),
-        //StructField("Tournee", StringType, true),
-        //StructField("Immatriculation ", StringType, true)
+        StructField("Bouton_poussoir_1", IntegerType, true),
+        StructField("Bouton_poussoir_2", IntegerType, true),
+        StructField("Bouton_poussoir_3", IntegerType, true),
+        StructField("Bouton_poussoir_4", IntegerType, true),
+        StructField("Bouton_poussoir_5", IntegerType, true),
+        StructField("Bouton_poussoir_6", IntegerType, true),
+        StructField("Statut_du_bac", StringType, true),
+        StructField("Immatriculation", StringType, true),
+        StructField("Tournee", StringType, true)
       )
     )
 
@@ -87,9 +90,9 @@ class ImportDechetTest {
       .format("csv") // "minioSelectJSON" for JSON or "minioSelectParquet" for Parquet
       .schema(schemaExpected) // mandatory
       .option("delimiter", ";")
-      .load("src/test/resources/Local/services/ExecuteImportDecheTestExpected.csv")
+      .load("src/test/resources/Local/services/ExecuteImportDechetTestExpected.csv")
 
-    assertEquals(dfInput.except(dfExpected).count(), 0)
+    assertEquals(0,dfInput.except(dfExpected).count())
 
-  }*/
+  }
 }

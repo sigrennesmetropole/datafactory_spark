@@ -31,14 +31,14 @@ class ImportDechetTest {
         StructField("Code_puce", StringType, true),
         StructField("Pesee_net", DoubleType, true),
         StructField("Statut_de_la_levee", IntegerType, false),
-        StructField("Latitude", DoubleType, true),
-        StructField("Longitude", DoubleType, true),
-        StructField("Bouton_poussoir_1", DoubleType, true),
-        StructField("Bouton_poussoir_2", DoubleType, true),
-        StructField("Bouton_poussoir_3", DoubleType, true),
-        StructField("Bouton_poussoir_4", DoubleType, true),
-        StructField("Bouton_poussoir_5", DoubleType, true),
-        StructField("Bouton_poussoir_6", DoubleType, true)
+        StructField("Latitude", StringType, true),
+        StructField("Longitude", StringType, true),
+        StructField("Bouton_poussoir_1", IntegerType, true),
+        StructField("Bouton_poussoir_2", IntegerType, true),
+        StructField("Bouton_poussoir_3", IntegerType, true),
+        StructField("Bouton_poussoir_4", IntegerType, true),
+        StructField("Bouton_poussoir_5", IntegerType, true),
+        StructField("Bouton_poussoir_6", IntegerType, true)
         //StructField("Statut bac", StringType, true),
         //StructField("Tournee", StringType, true),
         //StructField("Immatriculation ", StringType, true)
@@ -52,7 +52,7 @@ class ImportDechetTest {
       .schema(schemaInput) // mandatory
       .option("delimiter", ";")
       .load("src/test/resources/Local/services/ReadFromMinioTestExpected.csv")
-    assertEquals(dfInput.except(dfExpected).count(), 0)
+    assertEquals(0,dfInput.except(dfExpected).count())
   }
 
   @Test

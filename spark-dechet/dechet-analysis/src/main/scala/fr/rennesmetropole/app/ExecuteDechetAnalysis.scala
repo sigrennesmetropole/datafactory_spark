@@ -5,6 +5,8 @@ import fr.rennesmetropole.services.{DechetAnalysis, ImportDechet}
 import fr.rennesmetropole.tools.Utils
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
+import java.time.Instant
+
 object ExecuteDechetAnalysis {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     val logger = Logger(getClass.getName)
@@ -12,6 +14,11 @@ object ExecuteDechetAnalysis {
     var SYSDATE = java.time.LocalDate.now.toString
     try {
       SYSDATE = args(0)
+      if(Utils.envVar("TEST_MODE") != "False" && args.length>1){
+        if(args(1).nonEmpty) {
+          DechetAnalysis.setNow(Instant.parse(args(1)))
+        }
+      }
     } catch {
       case e: Throwable => {
         println("Des arguments manquent")
@@ -54,7 +61,7 @@ object ExecuteDechetAnalysis {
       df_ImportDechet.show(false)
       var df_PartitionedDechet = df_ImportDechet
       if(!df_ImportDechet.head(1).isEmpty){
-        val df_AnalysedDechet = DechetAnalysis.ExecuteDechetAnalysis_Collecte(spark, df_ImportDechet,SYSDATE, df_lastestBac)
+        val df_AnalysedDechet = DechetAnalysis.ExecuteDechetAnalysis_Collecte(spark, df_ImportDechet,SYSDATE, df_lastestBac).dropDuplicates()
         println("ANALYSED DECHET")
         df_AnalysedDechet.show(false)
 
@@ -67,9 +74,6 @@ object ExecuteDechetAnalysis {
 
       if (Utils.envVar("TEST_MODE") == "False" && (!df_PartitionedDechet.head(1).isEmpty)) {
         Left(Utils.writeToS3(spark,df_PartitionedDechet,nameEnv,SYSDATE))
-        println("Write to s3 Done")
-        Left(Utils.postgresPersist(spark, Utils.envVar("POSTGRES_URL"), df_PartitionedDechet, Utils.envVar("POSTGRES_TABLE_DECHET_NAME"),SYSDATE))
-        
       }
       else {
         Right(df_PartitionedDechet)

@@ -1,0 +1,4 @@
+id_bac;code_puce;code_producteur;categorie_recipient;type_recipient;litrage_recipient;type_puce;nb_collecte;date_debut;date_fin;date_crea;date_modif;year;month;day;id_producteur
+5535109055518735565;041A8D67F6;169904;Bacs carton;Bac carton 770 l;770;Connu;;2022-01-01 00:00:00;;2022-06-13 12:43:01;;2022;01;01;-3383476979751539603
+-4641410984700616585;null;0;Indeterminee;Indetermine;0;Absent;;2020-01-01 00:00:00;;2022-06-13 12:42:56;;;;;-4641410984700616585
+-7897005120788642562;INCONNU;0;Indetermine;Indetermine;0;Inconnu;;2020-01-01 00:00:00;;2022-06-13 12:42:56;;;;;-4641410984700616585

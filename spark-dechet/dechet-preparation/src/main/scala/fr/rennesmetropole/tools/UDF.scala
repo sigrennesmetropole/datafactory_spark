@@ -8,10 +8,14 @@ object UDF {
 
     def udfToInt(valeur:String): Int ={
         try {
+          if(valeur.contains(".")) {
+            valeur.toDouble.toInt
+          }else {
             valeur.toInt
+          }
         }catch{
              case e : Throwable => 
-             //println("ERREUR, essaie de transformer "+valeur+" en Int \n" +e)
+             println("ERREUR, essaie de transformer "+valeur+" en Int \n" +e)
              null.asInstanceOf[Int]
         }
     }

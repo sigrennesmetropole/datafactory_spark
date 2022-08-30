@@ -67,6 +67,10 @@
   </build>
   <repositories>
     <repository>
+      <id>RMPFDTA-repo</id>
+      <url>file:///${project.basedir}/RMPFDTA-repo</url>
+    </repository>
+    <repository>
       <releases />
       <snapshots>
         <enabled>false</enabled>
@@ -83,8 +87,8 @@
   <dependencies>
     <dependency>
       <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
-      <version>3.0.5</version>
+      <artifactId>scalatest_2.12</artifactId>
+      <version>3.0.8</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -98,11 +102,11 @@
     <encoding>UTF-8</encoding>
     <application.name>rm-dechet-analysis</application.name>
     <maven.compiler.target>1.8</maven.compiler.target>
-    <scala.binary.version>2.11</scala.binary.version>
-    <hadoop.version>3.3.1</hadoop.version>
-    <scala.version>2.11.8</scala.version>
-    <scala.compat.version>2.11</scala.compat.version>
-    <spark.version>2.4.3</spark.version>
+    <scala.binary.version>2.12</scala.binary.version>
+    <version.javax.mail>1.6.2</version.javax.mail>
+    <hadoop.version>3.3.2</hadoop.version>
+    <scala.version>2.12.15</scala.version>
+    <spark.version>3.3.0</spark.version>
     <maven.compiler.source>1.8</maven.compiler.source>
   </properties>
 </project>

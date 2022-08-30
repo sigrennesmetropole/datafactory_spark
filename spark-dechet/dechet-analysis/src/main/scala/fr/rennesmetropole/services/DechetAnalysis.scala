@@ -2,23 +2,36 @@ package fr.rennesmetropole.services
 
 import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
+import fr.rennesmetropole.tools.Utils.show
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.slf4j.LoggerFactory
 
 import java.sql.Timestamp
+import java.time.Instant
+import java.util.Properties
 
 object DechetAnalysis {
-
   val logger = Logger(LoggerFactory.getLogger(this.getClass))
   val frTZ = java.time.ZoneId.of("Europe/Paris")
-  val now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
+  var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
+
+  
+  def setNow(now_test:Instant):Unit ={
+    if(Utils.envVar("TEST_MODE") != "False"){
+      println("NOW TEST")
+      this.now = Timestamp.from(now_test)
+      println(now)
+    }else {
+       now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
+    }
+  }
   /**
-   * Fonction qui permet de créer un dataframe avec les donnée
+   * Fonction qui permet de creer un dataframe avec les donnee
    *
    * @param spark : la session spark
-   * @param df    : le dataframe à traiter
+   * @param df    : le dataframe a traiter
    * @return
    */
   def ExecuteDechetAnalysis_Collecte(spark: SparkSession, df_raw: DataFrame, SYSDATE: String, df_lastestBac: DataFrame): DataFrame = {
@@ -40,9 +53,10 @@ object DechetAnalysis {
             StructField("day", StringType, false)
           )
         )
+    println("Dechet Analsyis")
     if(!df_raw.head(1).isEmpty){
       try{
-        val df_lastestBacFiltered = df_lastestBac.select("id_bac", "code_puce","date_debut","date_fin")
+        val df_lastestBacFiltered = df_lastestBac.select("id_bac", "code_puce","date_debut","date_fin","categorie_recipient")
         val dfJoined = df_raw.join(df_lastestBacFiltered,
           df_raw("Code_puce") <=> df_lastestBacFiltered("code_puce") &&
             Utils.timestampWithoutZone()(col("Date_de_la_levee"),col("Heure_de_la_levee")) >= df_lastestBacFiltered("date_debut")
@@ -50,7 +64,7 @@ object DechetAnalysis {
             || Utils.timestampWithoutZone()(col("Date_de_la_levee"),col("Heure_de_la_levee")) <= df_lastestBacFiltered("date_fin")), "left")
           .drop(df_lastestBacFiltered("code_puce"))
 
-         //dfJoined.show()
+         //dfJoined.show(false)
 
         var df_withTimestamp = dfJoined
           .withColumn("id_bac",
@@ -69,23 +83,153 @@ object DechetAnalysis {
               && (col("date_fin").isNull
               || col("date_mesure") <= col("date_fin")), df_withTimestamp("id_bac") )
           .otherwise(lit(df_lastestBacFiltered.filter(df_lastestBacFiltered("code_puce") === "INCONNU").first.getAs("id_bac"))))
-
+        show(df_withTimestamp,"df_withTimestamp")
        /* df_withTimestamp = df_withTimestamp.drop("id_bac").withColumnRenamed("id_bac_by_date","id_bac")
           .filter(col("date_mesure") > col("date_fin")
             || col("date_mesure") < col("date_debut"))*/
-
-        //df_withTimestamp.show(false)
-        df_withTimestamp.select("date_mesure","code_puce", "id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif")
+       //Partie redressement données
+        val df_poids_corr = redressement_donne(df_withTimestamp,spark)
+        df_poids_corr.select("date_mesure","code_puce", "id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif","type_flux")
       }catch{
         case e:Throwable =>
-        println("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" +e)
+        println("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" + e)
         spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
       }
     }else {
       spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
     }
   }
+  def redressement_donne(df_raw: DataFrame, spark: SparkSession): DataFrame = {
+  // on identifie les type de flux
+    var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_immat")))
+    show(df_withTypeFlux,"df_withTypeFlux")
+    //On récupère la liste des code_immat qui n'ont pas de catégorie récipient mais qui sont déductible car code_immat non null
+    var df_categorieRecipientNull_and_CodeImmatNotNull = df_withTypeFlux.select("type_flux","code_immat").where(col("type_flux")===lit("Inconnu_connu")).select("code_immat")
+    show(df_categorieRecipientNull_and_CodeImmatNotNull,"df_categorieRecipientNull_and_CodeImmatNotNull")
+    //On récupère les code_immat qui corresponde a des catégorie_recipient null pour determiner le flux le plus probable (flux que le camion a le plus récupéré)
+    val dataset_of_codeImmat = df_categorieRecipientNull_and_CodeImmatNotNull.collect()
+    dataset_of_codeImmat.foreach(row =>{
+      //determination du flux le plus probable en comptant et en prenant le flux le plus ramassé de la journée
+      val moyenne_categorie_for_a_codeImmat = df_withTypeFlux.select("type_flux","code_immat").where(col("code_immat")===lit(row.getString(0))).groupBy("type_flux","code_immat").count().orderBy(desc("count")).take(1).head(0).toString()
+      df_withTypeFlux = df_withTypeFlux.withColumn("categorie_recipient_moyen",when(df_withTypeFlux("code_immat")===lit(row.getString(0)),moyenne_categorie_for_a_codeImmat))
+    })
+    println("test PR UDF :" + df_categorieRecipientNull_and_CodeImmatNotNull.show())
+    //Update de la colonne de flux
+    val df_withAllTypeFlux = df_withTypeFlux.withColumn("type_flux_temp",Utils.type_flux_UDF("post_flux")(df_withTypeFlux("type_flux"),df_withTypeFlux("code_immat"),df_withTypeFlux("categorie_recipient_moyen"))).drop("type_flux").withColumnRenamed("type_flux_temp","type_flux")
+    show(df_withAllTypeFlux,"df_withAllTypeFlux")
+    //Redressement des pesées en fonction des flux
+    val df_poids_corr = df_withAllTypeFlux.withColumn("poids_corr",Utils.redressementUDF()(df_withAllTypeFlux("code_tournee"),df_withAllTypeFlux("poids"),df_withAllTypeFlux("type_flux")))
+    show(df_poids_corr,"df_poids_corr")
+    df_poids_corr
+  }
+  def redressement_donne_incorrect(df_a_redresser: DataFrame,df_support: DataFrame,df_refBac: DataFrame, spark: SparkSession,dateRef:String,date:String): DataFrame = {
 
+    // ********** Partie gestion des moyennes des flux sur le même mois de l'année précedente **********
+
+    //Map pour le moyennes des pesées à corriger avec bac rattaché
+    val mapMoyenneBacRattache = scala.collection.mutable.Map[String,Double]()
+    //Map pour le moyennes  globales même mois année-1 sans bac rattaché
+    val mapMoyenneSansBacRattache = scala.collection.mutable.Map[String,Double]()
+    //liste pour calculer les moyennes dynamiques pour les pesées à corriger avec bac rattaché
+    var liste_litrage_flux = Array(("OM140", "Bacs ordures ménagères", ("120-140"), 9.7), ("OM180", "Bacs ordures ménagères", ("180"), 12.4), ("OM240", "Bacs ordures ménagères", ("240"), 17.6),
+    ("OM360", "Bacs ordures ménagères", ("330-340-360"), 27.6), ("OM400", "Bacs ordures ménagères", ("400"), 22), ("OM660", "Bacs ordures ménagères", ("500-660"), 46.4),
+    ("OM770", "Bacs ordures ménagères", ("750-770-1000"), 52.7), ("CS140", "Bacs collecte sélective", ("120-140"), 5.2), ("CS180", "Bacs collecte sélective", ("180"), 6.8),
+    ("CS240", "Bacs collecte sélective", ("240"), 7.6), ("CS360", "Bacs collecte sélective", ("330-340-360"), 10.7), ("CS660", "Bacs collecte sélective", ("500-660"), 21.9),
+    ("CS770", "Bacs collecte sélective", ("750-770-1000"), 24.1), ("BIO140", "Bacs biodéchets", ("120-140"), 34.9), ("BIO240", "Bacs biodéchets", ("240"), 29.1),
+    ("BIO400", "Bacs biodéchets", ("400"), 64.5), ("VE240", "Bacs verre", ("240"), 46.6), ("VE400", "Bacs verre", ("400"), 71.6),
+    ("VE770", "Bacs verre", ("750-770-1000"), 72.1))
+    //liste pour calculer les moyennes globales même mois année-1 sans bac rattaché
+    var liste_flux = Array(("OMglobal", "OM", 17.8), ("CSglobal", "CS", 9.2), ("BIOglobal", "BIO", 53.5), ("VEglobal", "VE", 60.5))
+    val df_join = df_support.join(df_refBac,Seq("id_bac"),"left")
+    show(df_refBac,"df_refBac")
+    show(df_join,"df_join")
+    //calcul des moyennes pour les pesé avec bac rattaché et pour chaque type de récipient
+    for (flux_lit <- liste_litrage_flux) {
+      var df_moyenne = df_join.filter(
+        date_format(df_join("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+          df_join("poids")>0 && df_join("poids")<250 &&
+          df_join("categorie_recipient")===lit(flux_lit._2) &&
+          df_join("litrage_recipient").isin(flux_lit._3.split("-"):_*)
+      )
+      val moyenne = df_moyenne.groupBy("categorie_recipient").agg(count("*") as "count",avg("poids").as("moyenne_poids")).filter(col("count")>=1) //TODO le "1" a remplacer par 50 après la démo
+      var moyenne_value =flux_lit._4.toString.toDouble
+      if (!moyenne.isEmpty){
+        moyenne_value = moyenne.take(1).head(2).toString().toDouble
+        mapMoyenneBacRattache.put(flux_lit._1,moyenne_value)
+      }else {
+        mapMoyenneBacRattache.put(flux_lit._1,moyenne_value)
+      }
+    }
+    println("mapMoyenneBacRattache : " + mapMoyenneBacRattache.mkString(" - "))
+    //calcul des moyennes pour les pesé avec bac non rattaché et pour chaque type de récipient
+    for (flux_global <- liste_flux) {
+      val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+        df_support("poids")>0 && df_support("poids")<250 &&
+        df_support("code_tournee").contains(flux_global._2)
+      ).groupBy("code_tournee").agg(avg("poids").as("moyenne_poids"))
+      var moyenne_value =flux_global._3.toString.toDouble
+      if (!moyenne.isEmpty){
+        moyenne_value = moyenne.take(1).head(1).toString().toDouble
+        mapMoyenneSansBacRattache.put(flux_global._1,moyenne_value)
+      }else {
+        mapMoyenneSansBacRattache.put(flux_global._1,moyenne_value)
+      }
+    }
+    println("mapMoyenneSansBacRattache : " + mapMoyenneSansBacRattache.mkString(" - "))
+    //Calcul moyenne des flux Inconnu et Autres
+    val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+      df_support("poids")>0 && df_support("poids")<250)
+      .agg(avg("poids").as("moyenne_poids"))
+    //Variable pour le moyennes  globales même mois année-1 sans bac rattaché
+    val mapMoyenneBacInconnu = moyenne.take(1).head(0).toString().toDouble
+
+    // ********** Partie de la mise en place de la correction du poids
+
+    if(!dateRef.contains("2020")){
+      val connectionProps = new Properties()
+      val url = Utils.envVar("POSTGRES_URL")
+      connectionProps.setProperty("driver", "org.postgresql.Driver")
+      connectionProps.setProperty("user", Utils.envVar("POSTGRES_ACCESS_KEY"))
+      connectionProps.setProperty("password", Utils.envVar("POSTGRES_SECRET_KEY"))
+      // on selectionne les x dernière valeurs reçus de chaque id_bac ayant pour poids_corr le poids
+      val req ="""
+                 |select * from (
+                 |    select id_bac,
+                 |           poids,
+                 |           poids_corr,
+                 |		        date_mesure,
+                 |           row_number() over (partition by id_bac order by date_mesure desc) as history_value
+                 |    from dwh.fac_dechets where poids=poids_corr) ranks
+                 |where history_value <= 3
+                 |""".stripMargin
+      val df_history = spark.read.jdbc(url, s"($req) as temp", connectionProps)
+      show(df_history,"df_history")
+
+      //dataframe avec tout les id_bac qui ont 6 valeurs historisé dont on peut se servir pour corriger
+      val df_correction_valide = df_history.groupBy("id_bac").agg(avg("poids") as "avg",count("poids") as "count").filter("count==3").drop("count")
+      show(df_correction_valide,"df_countdf_count_valide")
+
+      //dataframe avec tout les id_bac qui n'ont pas 6 valeurs historisé pour corriger
+      val df_correction_invalide = df_history.groupBy("id_bac").count().filter("count<3").drop("count")
+      show(df_correction_invalide,"df_count_non_valide")
+      //jointure entre les données a corriger de la journée et le référentiel pour les collecte dechets qui sont rattaché a des bacs
+      var df_correction = df_a_redresser.where(date_format(col("date_crea"),"YYYY-MM-dd")===lit(date)).join(df_refBac,Seq("id_bac"),"left") // JOINTURE pour récupérer les dechet qui sont avec des bacs
+        .drop(df_refBac("code_puce")).drop(df_refBac("year")).drop(df_refBac("month")).drop(df_refBac("day")).drop(df_refBac("date_modif")).drop(df_refBac("date_crea")) // drop des colonnes en trop dû a la jointure
+      df_correction = df_correction.join(df_correction_valide,Seq("id_bac"),"left")
+      df_correction = df_correction.withColumn("poids_corr",when(col("poids")===lit("0.0"),col("avg")).otherwise(col("poids_corr"))).drop("avg")
+      show(df_correction,"df_correction")
+      //dataframe avec le poids corrigé pour certains id_bacs (id_bac avec moins de 6 valeurs historisé
+      show(df_correction.join(df_correction_invalide,Seq("id_bac"),"left"),"test jointure")
+      val df_correction_non_valide = df_correction.join(df_correction_invalide,Seq("id_bac"),"left").withColumn("poids_corr",Utils.redressementCorrectionInvalideUDF(mapMoyenneBacRattache,mapMoyenneSansBacRattache,mapMoyenneBacInconnu)(df_correction("type_flux"),df_correction("litrage_recipient"),df_correction("poids_corr")))
+      show(df_correction_non_valide,"df_correction_non_valide")
+      val df_final = df_correction_non_valide.select("date_mesure","code_puce","id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif","year","month","day")
+      show(df_final,"df_final")
+      df_final
+    }else {
+      df_a_redresser
+    }
+
+  }
   def prepareIncomingProducteurDf(df_raw: DataFrame, spark: SparkSession): DataFrame = {
     try{
       val df = df_raw
@@ -125,7 +269,10 @@ object DechetAnalysis {
         StructField("date_debut", TimestampType, false),
         StructField("date_fin", TimestampType, true),
         StructField("date_crea", TimestampType, false),
-        StructField("date_modif", TimestampType, true)
+        StructField("date_modif", TimestampType, true),
+        StructField("year", StringType, false), 
+        StructField("month", StringType, false), 
+        StructField("day", StringType, false)
       )
     )
     spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
@@ -139,8 +286,7 @@ object DechetAnalysis {
         Utils.timestampWithZoneUdf()(lit(datePhoto),lit("000000")).cast(TimestampType))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Producteurs supprimés")
-    dfDeleted.show()
+    show(dfDeleted,"Producteurs supprimes")
 
     dfDeleted
   }
@@ -148,10 +294,9 @@ object DechetAnalysis {
   def createProducteurTreatment(df_partitionedIncomingProducteur: DataFrame, datePhoto: String, df_latest: DataFrame) = {
     val df_ToCreate = df_partitionedIncomingProducteur.join(df_latest.filter(col("date_fin").isNull),
       df_latest("code_producteur") === df_partitionedIncomingProducteur("code_producteur") , "left_anti")
-      .withColumn("date_modif", lit(now).cast(TimestampType))
+      .withColumn("date_modif", lit(null).cast(TimestampType))
 
-    println("Nouveaux producteurs")
-    df_ToCreate.show()
+    show(df_ToCreate,"Nouveaux producteurs")
 
     df_ToCreate
   }
@@ -177,8 +322,7 @@ object DechetAnalysis {
       .drop(df_latestProducteur("longitude"))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Producteurs mis à jour")
-    df_updated.show()
+    show(df_updated,"Producteurs mis a jour")
 
    /* val df_reactivated = df_latestProducteur.filter(col("date_fin").isNotNull).join(df_partitionedIncomingProducteur, df_latestProducteur("code_producteur")
       === df_partitionedIncomingProducteur("code_producteur"), "inner")
@@ -202,18 +346,18 @@ object DechetAnalysis {
       .withColumn("id_producteur",Utils.idProducteurUDF()(col("code_producteur"),lit(datePhoto)))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Producteurs réactivés")
-    df_reactivated.show()*/
+    println("Producteurs reactives")
+    df_reactivated.show(false)*/
 
     val dfJoined = df_updated.unionByName(df_latestProducteur.filter(col("date_fin").isNotNull))//.unionByName(df_toEnd)
     dfJoined
   }
 
   /**
-   * Fonction qui permet de créer un dataframe avec les donnée
+   * Fonction qui permet de creer un dataframe avec les donnee
    *
    * @param spark : la session spark
-   * @param df    : le dataframe à traiter
+   * @param df    : le dataframe a traiter
    * @return
    */
   def ExecuteDechetAnalysis_Producteur(spark: SparkSession, df_raw: DataFrame, SYSDATE: String, datePhoto: String,
@@ -224,25 +368,21 @@ object DechetAnalysis {
     } else {
       df_preparedIncomingProducteur = createEmptyProducteurDf(spark)
     }
-    println("Producteur à traiter")
-    df_preparedIncomingProducteur.show()
+    show(df_preparedIncomingProducteur,"Producteur a traiter")
 
     // Ajout des informations de partitionnement
     val df_partitionedIncomingProducteur = Utils.dfToPartitionedDf(df_preparedIncomingProducteur, SYSDATE)
-    println("Producteurs dans le nouveau référentiel")
-    df_partitionedIncomingProducteur.show()
+    show(df_partitionedIncomingProducteur,"Producteurs dans le nouveau referentiel")
 
-
-    // Récupération des bacs inconnus
+    // Recuperation des bacs inconnus
     val dfUnknown = df_latestProducteur.filter(col("code_producteur").isNull)
-    println("Producteur inconnu")
-    dfUnknown.show()
+    show(dfUnknown,"Producteur inconnu")
 
-    // Ajout de la date de fin aux bacs supprimés
+    // Ajout de la date de fin aux bacs supprimes
     val dfDeleted = deletedProducteurTreatment(df_partitionedIncomingProducteur, datePhoto,
       df_latestProducteur)
 
-    // Ajout des nouveaux élements dans le référentiel
+    // Ajout des nouveaux elements dans le referentiel
     val dfCreated = createProducteurTreatment(df_partitionedIncomingProducteur, datePhoto,
       df_latestProducteur)
 
@@ -252,12 +392,11 @@ object DechetAnalysis {
       .groupBy("code_producteur","id_rva","commune","code_insee","type_producteur","activite","latitude","longitude")
       .count().filter("count > 1")
 
-    // Producteurs non changés
+    // Producteurs non changes
     val df_notChanged = latestActive.filter(col("code_producteur").isInCollection(
       df_duplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
-    println("Producteur inchangés")
-    df_notChanged.show()
+    show(df_notChanged,"Producteur inchanges")
 
     val df_notduplicated = latestActive.unionByName(df_partitionedIncomingProducteur)
       .groupBy("code_producteur","id_rva","commune","code_insee","type_producteur","activite","latitude","longitude")
@@ -266,27 +405,27 @@ object DechetAnalysis {
     val df_changed = latestActive.filter(col("code_producteur").isInCollection(
       df_notduplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
-    println("Producteur changés")
-    df_changed.show()
+    show(df_changed,"Producteur changes")
+    
 
-    // Modification des élements existants
+    // Modification des elements existants
     val dfUpdated = updatedProducteurTreatment(df_changed, df_partitionedIncomingProducteur, datePhoto)
 
     val dfOld = df_latestProducteur.filter(col("date_fin").isNotNull)
-    // Création du nouveau dataframe référentiel
+    // Creation du nouveau dataframe referentiel
     val newRefential = dfDeleted.unionByName(dfCreated).unionByName(dfUpdated).unionByName(dfUnknown).unionByName(dfOld).unionByName(df_notChanged)
 
-    println("Nouveau référentiel Producteur")
-    newRefential.show()
+  
+    show(newRefential,"Nouveau referentiel Producteur")
 
     newRefential
   }
 
   /**
-   * Fonction qui permet de créer un dataframe avec les donnée
+   * Fonction qui permet de creer un dataframe avec les donnee
    *
    * @param spark : la session spark
-   * @param df    : le dataframe à traiter
+   * @param df    : le dataframe a traiter
    * @return
    */
   def ExecuteDechetAnalysis_Bac(spark: SparkSession, df_raw: DataFrame, SYSDATE: String, datePhoto: String,
@@ -297,95 +436,98 @@ object DechetAnalysis {
     } else {
       df_preparedIncomingRecipient = createEmptyBacDf(spark)
     }
-    println("Bac à traiter")
-    df_preparedIncomingRecipient.show()
+    show(df_preparedIncomingRecipient,"Bac a traiter")
     // Ajout des informations de partitionnement
-    val df_partitionedIncomingRecipient = Utils.dfToPartitionedDf(df_preparedIncomingRecipient, SYSDATE)
+    var df_partitionedIncomingRecipient = Utils.dfToPartitionedDf(df_preparedIncomingRecipient, SYSDATE)
 
-    println("Bacs dans le nouveau référentiel")
-    df_partitionedIncomingRecipient.show()
+    show(df_partitionedIncomingRecipient,"Bacs dans le nouveau referentiel")
+    // re attribution des id_producteur si le code_proucteur n'a pas changé
+    var df_id_latest = df_latestRecipient.select("code_producteur","id_producteur").withColumnRenamed("id_producteur","id_producteur_latest")
+    var df_id_incoming = df_partitionedIncomingRecipient.select("code_producteur","id_producteur").withColumnRenamed("id_producteur","id_producteur_incoming")
 
-    // Récupération des bacs inconnus
-    val dfUnknown = df_latestRecipient.filter(col("code_puce").isNull
+    val df_id_join = df_id_incoming.join(df_id_latest,Seq("code_producteur"),"full_outer")
+        .withColumn("id_producteur_temp", when(col("id_producteur_latest").isNull,df_id_incoming("id_producteur_incoming") )
+        .otherwise(df_id_latest("id_producteur_latest")))
+        .select("code_producteur", "id_producteur_temp")
+        .withColumnRenamed("id_producteur_temp","id_producteur")
+    df_partitionedIncomingRecipient = df_partitionedIncomingRecipient.drop("id_producteur").join(df_id_join,Seq("code_producteur"), "inner")
+    // Recuperation des bacs inconnus
+    val dfUnknown = df_latestRecipient.filter(col("code_puce") === "null"
                                               || col("code_puce") === "INCONNU")
 
-    // Ajout de la date de fin aux bacs supprimés
+    // Ajout de la date de fin aux bacs supprimes
     val dfDeleted = deletedRecipientTreatment(df_partitionedIncomingRecipient, datePhoto,
       df_latestRecipient)
 
-    // Ajout des nouveaux élements dans le référentiel
+    // Ajout des nouveaux elements dans le referentiel
     val dfCreated = createRecipientTreatment(df_partitionedIncomingRecipient, datePhoto,
       df_latestRecipient)
 
     val latestActive = df_latestRecipient.filter(col("date_fin").isNull)
 
-    val df_duplicated =  latestActive.unionByName(df_partitionedIncomingRecipient)
-      .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte","id_producteur")
+    val df_duplicated =  latestActive.drop("id_producteur").unionByName(df_partitionedIncomingRecipient.drop("id_producteur"))
+      .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte")
       .count().filter("count > 1")
 
-    // Producteurs non changés
+    show(df_duplicated,"df_duplicated")
+    // Recipient non changes
     val df_notChanged = latestActive.filter(col("code_puce").isInCollection(
       df_duplicated.select("code_puce").filter(col("code_puce").isNotNull).rdd.map(row => row(0)).collect().toList))
 
-    println("Bacs inchangés")
-    df_notChanged.show()
+    show(df_notChanged,"Bacs inchanges")
 
-    val df_notduplicated =  latestActive.unionByName(df_partitionedIncomingRecipient)
-      .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte","id_producteur")
+    val df_notduplicated =  latestActive.drop("id_producteur").unionByName(df_partitionedIncomingRecipient.drop("id_producteur"))
+      .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte")
       .count().filter("count = 1")
-
+    show(df_notduplicated,"df_notduplicated")
     val df_changed = latestActive.filter(col("code_puce").isInCollection(
-      df_notduplicated.select("code_puce").filter(col("code_puce").isNotNull).rdd.map(row => row(0)).collect().toList))
+      df_notduplicated.select("code_puce").filter(col("code_puce").isNotNull && col("code_puce") =!= "INCONNU" && col("code_puce") =!= "null").rdd.map(row => row(0)).collect().toList))
 
-    println("Bacs changés")
-    df_changed.show()
+    show(df_changed,"Bacs changes")
 
-    // Modification des élements existants
+    // Modification des elements existants
     val dfUpdated = updatedRecipientTreatment(df_changed, df_partitionedIncomingRecipient, datePhoto)
 
     val dfOld = df_latestRecipient.filter(col("date_fin").isNotNull)
 
-    // Création du nouveau dataframe référentiel
+    // Creation du nouveau dataframe referentiel
     val newRefential = dfDeleted.unionByName(dfCreated).unionByName(dfUpdated).unionByName(dfUnknown).unionByName(dfOld).unionByName(df_notChanged)
 
-    println("Nouveau référentiel Bac")
-    newRefential.show()
+    show(newRefential,"Nouveau referentiel Bac")
 
-    // détection des producteurs inconnu dans le référentiel des produteurs
+    // detection des producteurs inconnu dans le referentiel des produteurs
     // affectation de l'id producteur pour le code producteur null
     val newRefentialWithUnknownProducteur = DechetAnalysis.joinLatestBacAndLatestProducteur(newRefential, df_latestProducteur)
       .withColumn("id_producteur", when(col("id_producteur").isNull,
         df_latestProducteur.filter(df_latestProducteur("code_producteur").isNull).first().getAs("id_producteur"))
         .otherwise(col("id_producteur")))
 
-    println("Nouveau référentiel Bac après traitement des producteurs inconnus")
-    newRefentialWithUnknownProducteur.show()
+    show(newRefentialWithUnknownProducteur,"Nouveau referentiel Bac après traitement des producteurs inconnus")
 
     newRefentialWithUnknownProducteur
   }
 
 
   /**
-   * Détection des nouveaux éléments pour les ajouter au référentiel
+   * Detection des nouveaux elements pour les ajouter au referentiel
    * @param df_preparedIncomingRecipient
    * @param datePhoto
    * @param newRefential
    * @return
    */
   def createRecipientTreatment(df_preparedIncomingRecipient: DataFrame, datePhoto: String, df_latest: DataFrame): DataFrame = {
-    // recherche des nouveaux éléments dans le référentiel
+    // recherche des nouveaux elements dans le referentiel
     val df_ToCreate = df_preparedIncomingRecipient.join(df_latest.filter(col("date_fin").isNull),
                       df_latest("code_puce") === df_preparedIncomingRecipient("code_puce"), "left_anti")
                       .withColumn("date_modif", lit(null).cast(TimestampType))
 
-    println("Nouveaux bacs")
-    df_ToCreate.show()
+    show(df_ToCreate,"Nouveaux bacs")
 
     df_ToCreate
   }
 
   /**
-   * Etape de mise a jour des bacs supprimés du référentiel
+   * Etape de mise a jour des bacs supprimes du referentiel
    * @param df_preparedIncomingRecipient
    * @param datePhoto
    * @param df_lastestRecipient
@@ -395,14 +537,13 @@ object DechetAnalysis {
                                 df_latest : DataFrame) : DataFrame = {
     val dfDeleted = df_latest.join(df_preparedIncomingRecipient,
                   df_latest("code_puce") === df_preparedIncomingRecipient("code_puce"), "left_anti")
-                  .filter(not(col("code_puce").isNull || col("code_puce") === "INCONNU" )
+                  .filter(not(col("code_puce").isNull || col("code_puce") === "INCONNU" || col("code_puce") === "null")
                   && col("date_fin").isNull )
                   .withColumn("date_fin",
                               Utils.timestampWithZoneUdf()(lit(datePhoto),lit("000000")).cast(TimestampType))
                   .withColumn("date_modif",
                     lit(now).cast(TimestampType))
-    println("Bac supprimés")
-    dfDeleted.show()
+    show(dfDeleted,"Bac supprimes")
 
     dfDeleted
   }
@@ -428,7 +569,7 @@ object DechetAnalysis {
         .withColumn("date_debut", Utils.timestampWithZoneUdf()(col("date_photo"),lit("000000")).cast(TimestampType))
         .withColumn("date_fin",lit(null).cast(TimestampType))
         .withColumn("date_crea", lit(now).cast(TimestampType))
-        .withColumn("date_modif",lit(null).cast(TimestampType).cast(TimestampType))
+        .withColumn("date_modif",lit(null).cast(TimestampType))
       df.select("id_bac","code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte","id_producteur","date_debut","date_fin","date_crea","date_modif")
 
     }catch{
@@ -439,7 +580,7 @@ object DechetAnalysis {
   }
 
   /**
-   * Créé un dataframe vide avec le bon schema pour les bacs
+   * Cree un dataframe vide avec le bon schema pour les bacs
    * @param spark
    * @return
    */
@@ -454,11 +595,14 @@ object DechetAnalysis {
         StructField("litrage_recipient", IntegerType, false),
         StructField("type_puce", StringType, true),
         StructField("nb_collecte", FloatType, false),
-        StructField("id_producteur", IntegerType, false),
         StructField("date_debut", TimestampType, false),
         StructField("date_fin", TimestampType, true),
         StructField("date_crea", TimestampType, false),
-        StructField("date_modif", TimestampType, true)
+        StructField("date_modif", TimestampType, true),
+        StructField("year", StringType, false), 
+        StructField("month", StringType, false), 
+        StructField("day", StringType, false),
+        StructField("id_producteur", IntegerType, false)
       )
     )
     spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
@@ -491,7 +635,7 @@ object DechetAnalysis {
   }
 
   /**
-   * Methode de jointure des bacs et des producteurs pour detecter les bacs reliés à des producteurs inconnus
+   * Methode de jointure des bacs et des producteurs pour detecter les bacs relies a des producteurs inconnus
    * @param df_lastestBac
    * @param df_lastestProducteur
    * @return
@@ -506,23 +650,32 @@ object DechetAnalysis {
   }
 
   def updatedRecipientTreatment(df_lastestBac: DataFrame, dfIncoming: DataFrame, datePhoto: String): DataFrame = {
+    show(df_lastestBac,"df_lastestBac")
+    show(dfIncoming,"dfIncoming")
     var df_updated = df_lastestBac.filter(col("date_fin").isNull).join(dfIncoming, df_lastestBac("code_puce")
       === dfIncoming("code_puce"), "inner")
       .drop(dfIncoming("date_crea"))
       .drop(dfIncoming("date_fin"))
       .drop(dfIncoming("date_modif"))
-      .withColumn("id_bac_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
+      .withColumn("id_bac_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur") && df_lastestBac("code_puce") === dfIncoming("code_puce"),
         df_lastestBac("id_bac")).otherwise(dfIncoming("id_bac")))
+
+      .withColumn("date_crea_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
+        df_lastestBac("date_crea")).otherwise(lit(now).cast(TimestampType)))
+         
       .drop(df_lastestBac("code_puce"))
       .drop(df_lastestBac("categorie_recipient"))
       .drop(df_lastestBac("type_recipient"))
       .drop(df_lastestBac("litrage_recipient"))
       .drop(df_lastestBac("type_puce"))
       .drop(df_lastestBac("nb_collecte"))
+      .drop(df_lastestBac("date_crea"))
+      //.drop(df_lastestBac("date_modif"))
       .withColumn("id_producteur_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
         df_lastestBac("id_producteur")).otherwise(dfIncoming("id_producteur")))
       .withColumn("date_debut_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
         df_lastestBac("date_debut")).otherwise(dfIncoming("date_debut")))
+
       .withColumn("year_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
         df_lastestBac("year")).otherwise(dfIncoming("year")))
       .withColumn("month_modif", when(df_lastestBac("code_producteur") === dfIncoming("code_producteur"),
@@ -548,21 +701,30 @@ object DechetAnalysis {
       .withColumnRenamed("year_modif","year")
       .withColumnRenamed("month_modif","month")
       .withColumnRenamed("day_modif","day")
-      .withColumn("date_modif", lit(now).cast(TimestampType))
+      .withColumnRenamed("date_crea_modif","date_crea")
 
-    println("Bacs mis à jour")
+    show(df_updated,"df_updated jointure")
+    var df_updated_changed = df_updated.filter(col("id_bac").isInCollection(
+    df_lastestBac.select("id_bac").collect.map(f=>f.getLong(0)).toList))
+    show(df_updated_changed,"df_updated_changed")
+    var df_crea = df_updated.filter(!col("id_bac").isInCollection(
+    df_lastestBac.select("id_bac").collect.map(f=>f.getLong(0)).toList))
+    show(df_crea,"df_crea")
+    val dfToEnd = df_lastestBac.filter(col("date_fin").isNull)
+                    .join(dfIncoming, (df_lastestBac("code_puce") === dfIncoming("code_puce") && df_lastestBac("code_producteur") =!= dfIncoming("code_producteur")),
+                    "inner")
+      .select(df_lastestBac("id_bac"),df_lastestBac("code_puce"));
 
-val dfToEnd = df_lastestBac.filter(col("date_fin").isNull).join(dfIncoming, df_lastestBac("code_puce")
-  === dfIncoming("code_puce"), "inner").filter(df_lastestBac("code_producteur") =!= dfIncoming("code_producteur"))
-  .select(df_lastestBac("id_bac"),df_lastestBac("code_puce"));
+    show(dfToEnd,"Bacs a terminer (changement de code_producteur)");
 
-dfToEnd.show();
-
-df_updated = df_updated.unionByName(df_lastestBac.filter(col("id_bac").isInCollection(
-  dfToEnd.select("id_bac").collect.map(f=>f.getLong(0)).toList))
-  .withColumn("date_fin", Utils.timestampWithZoneUdf()(lit(datePhoto),lit("000000")).cast(TimestampType)))
-  
-df_updated.show()
+    df_updated_changed = df_updated_changed.unionByName(df_lastestBac.filter(col("id_bac").isInCollection(
+      dfToEnd.select("id_bac").collect.map(f=>f.getLong(0)).toList))
+      .withColumn("date_fin", Utils.timestampWithZoneUdf()(lit(datePhoto),lit("000000")).cast(TimestampType)))
+      .withColumn("date_modif",lit(now).cast(TimestampType))
+    show(df_updated_changed,"après avoir ajouter date_fin")
+    df_updated_changed = df_updated_changed.unionByName(df_crea.withColumn("date_modif",lit(null).cast(TimestampType))
+    )
+    show(df_updated_changed,"Bacs mis a jour (terminer)")
 
    /* val df_reactivated = df_lastestBac.filter(col("date_fin").isNotNull).join(dfIncoming, df_lastestBac("code_puce")
       === dfIncoming("code_puce"), "inner")
@@ -586,10 +748,10 @@ df_updated.show()
       .withColumn("id_bac",Utils.idBacUdf()(col("code_puce"),lit(datePhoto)))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Bacs réactivés")
-    df_reactivated.show()*/
+    println("Bacs reactives")
+    df_reactivated.show(false)*/
 
-    val dfJoined = df_updated// .unionByName(df_reactivated)
+    val dfJoined = df_updated_changed // .unionByName(df_reactivated)
 
     dfJoined
   }

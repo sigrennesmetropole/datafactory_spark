@@ -12,7 +12,7 @@ Lancement du container Spark :
 ```
 
 ## Serveur FTP
-Via FileZilla pour accéder au serveur FTP (Déchets IDEA) => Hôte:XXXX | identifiant: XXXXX | mdp: XXXXX | Port: XXXX
+Via FileZilla pour accéder au serveur FTP (Déchets IDEA) => Hôte:XXXXXX | identifiant: XXXXXXX | mdp: *voir .env* | Port: 4021
 ### Commande Collecte
 Commande pour préparé les données de collecte :
 ```

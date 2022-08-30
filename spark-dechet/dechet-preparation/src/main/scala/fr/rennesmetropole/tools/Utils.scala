@@ -1,12 +1,14 @@
   package fr.rennesmetropole.tools
 
-  import com.typesafe.config.{Config, ConfigFactory, ConfigObject}
+  import com.typesafe.config.{Config, ConfigFactory}
   import com.typesafe.scalalogging.Logger
   import org.apache.commons.lang3.StringUtils
+  import org.apache.hadoop.fs.Path
   import org.apache.spark.sql._
   import org.apache.spark.sql.functions._
   import org.apache.spark.sql.types._
-  import collection.JavaConversions._
+
+  import scala.collection.JavaConversions._
 
   object Utils {
 
@@ -61,46 +63,122 @@
     * @return Dataframe
     */
     def readData(spark: SparkSession, DATE: String, schema: StructType, nameEnv:String ): DataFrame = {
-    val URL = tableVar(nameEnv, "in_bucket")
-    
-    if(Utils.envVar("TEST_MODE") == "False") {
-
-      /* calcul du chemin pour lire les données sur minio */
       val postURL = date2URL(DATE)
-      println("URL de lecture sur Minio : " + URL + postURL)
+      if (Utils.envVar("TEST_MODE") == "False") {
+        val URL = tableVar(nameEnv, "in_bucket")
+        /* calcul du chemin pour lire les données sur minio */
+        println("URL de lecture sur Minio : " + URL + postURL)
 
-         try {
-        spark
-            .read
-            .option("header", Utils.tableVar(nameEnv,"header"))
-            .option("compression", "gzip")
-            .format(Utils.tableVar(nameEnv,"format"))
-            .option("delimiter", Utils.tableVar(nameEnv,"delimiter"))
-            .option("encoding", Utils.tableVar(nameEnv,"encoding"))
-            .csv(URL+postURL)
-          
+        var fromFolder = {
+          println("Reading data from : " + URL + postURL)
+          new Path(URL + postURL)
+        }
+        val conf = spark.sparkContext.hadoopConfiguration
+        val logfiles = fromFolder.getFileSystem(conf)
+          .listFiles(fromFolder, true)
+        var files = Seq[String]()
+        while (logfiles.hasNext) {
+          // one can filter here some specific files
+          files = files :+ logfiles.next().getPath().toString
+        }
+        //affiche le nombre de fichier trouvé
+        println("number of files read : " + files.length)
+        //affiche le path de tout les fichier trouvé
+        println(files.mkString("-"))
+        try {
+          nameEnv match {
+            case "tableExutoire" => {
+              if (files.length == 1) {
+                spark
+                  .read
+                  .format("com.crealytics.spark.excel")
+                  .option("header", "true")
+                  .option("inferSchema", "false")
+                  .option("maxRowsInMemory", 1000)
+                  .option("dataAddress", "'Données brutes Clear'!")
+                  .load(URL + postURL +"/" + files(0).split("/").last)
+
+              } else {
+                throw new Exception("Trop de fichier excel a lire (seulement 1 doit être present)")
+              }
+            }
+            case _ => {
+              spark
+                .read
+                .option("header", Utils.tableVar(nameEnv, "header"))
+                .option("compression", "gzip")
+                .format(Utils.tableVar(nameEnv, "format"))
+                .option("delimiter", Utils.tableVar(nameEnv, "delimiter"))
+                .option("encoding", Utils.tableVar(nameEnv, "encoding"))
+                .csv(URL + postURL)
+            }
+          }
         } catch {
-          case e : Throwable =>
-          println("ERROR while reading data at : " + URL+postURL + " \nError stacktrace :"+ e)
-          spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
+          case e: Throwable =>
+            println("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
+            spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
         }
 
-    // else... si nous somme en mode TEST
-    }else {
-        if(DATE == "WrongDate") {
-          spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
-        }else {
-          spark
-            .read
-            .option("header", "true")
-            .option("compression", "gzip")
-            .format("csv")
-            .schema(schema)
-            .option("delimiter", ";")
-            .load(URL)
-
+        // else... si nous somme en mode TEST
+      }
+      else {
+        val URL = tableVar(nameEnv, "test_bucket")
+        println("Chemin de lecture en local : " + URL + postURL)
+        var fromFolder = {
+          println("Reading data from : " + URL + postURL)
+          new Path(URL + postURL)
         }
-    }
+        val conf = spark.sparkContext.hadoopConfiguration
+        val logfiles = fromFolder.getFileSystem(conf)
+          .listFiles(fromFolder, true)
+        var files = Seq[String]()
+        while (logfiles.hasNext) {
+          // one can filter here some specific files
+          files = files :+ logfiles.next().getPath().toString
+        }
+        //affiche le nombre de fichier trouvé
+        println("number of files read : " + files.length)
+        //affiche le path de tout les fichier trouvé
+        println(files.mkString("-"))
+        nameEnv match {
+          case "tableExutoire" => {
+            if (DATE == "WrongDate") {
+              spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
+            } else {
+              if (files.length == 1 && files(0).split("/").last.contains(".xlsx")) {
+                spark
+                  .read
+                  .format("com.crealytics.spark.excel")
+                  .option("header", "true")
+                  .option("inferSchema", "true")
+                  .option("dataAddress", "0!")
+                  .load(URL + postURL  + files(0).split("/").last)
+              } else {
+                spark
+                  .read
+                  .option("header", "true")
+                  .format("csv")
+                  .option("delimiter", ";")
+                  .load(URL + postURL)
+              }
+            }
+          }
+          case _ => {
+            if (DATE == "WrongDate") {
+              spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schema)
+            } else {
+              spark
+                .read
+                .option("header", "true")
+                .option("compression", "gzip")
+                .format("csv")
+                .option("delimiter", ";")
+                .load(URL + postURL)
+
+            }
+          }
+        }
+      }
     }
 
     /**
@@ -110,13 +188,17 @@
     * @return string sous la forme yyyy/mm/ss ou ss est le numero de la semaine du mois courant
     */
     def date2URL(DATE: String): String = {
-      val date = DATE.split("-") // donne la date sous forme yyyy-mm-dd
-      val year = date(0);
-      val month = date(1);
-      val day = date(2);
-      val postURL = "year=" + year + "/month=" + month + "/day=" + day + "/";
-
-      return postURL
+      if(DATE !="WrongDate"){
+         val date = DATE.split("-") // donne la date sous forme yyyy-mm-dd
+        val year = date(0);
+        val month = date(1);
+        val day = date(2);
+        val postURL = "year=" + year + "/month=" + month + "/day=" + day + "/";
+        return postURL
+      }else {
+        return ""
+      }
+     
     }
 
   def getMap(spark: SparkSession, nameEnv:String): (Map[String,String],Map[String,(String,String)]) ={
@@ -154,6 +236,16 @@
   def getIterator(nameEnv:String, name: String):Iterator[Config] = {
       val listFields = config.getConfigList(nameEnv + "." +name) 
       listFields.iterator()
+  }
+
+    def getListName(nameEnv:String): Seq[String]={
+    val iterator = Utils.getIterator(nameEnv,"fields")
+      var list = List[String]()
+      while(iterator.hasNext){
+        val current = iterator.next
+        list =list :+ current.getString("name")
+      }
+    list
   }
 
   def renommageColonnes(spark: SparkSession, df_toRename: DataFrame, mapName:Map[String,String] ): DataFrame ={

@@ -7,9 +7,11 @@ import org.scalatest.Assertions._
 import org.apache.spark.sql.types._
 import com.typesafe.config.ConfigFactory
 import org.apache.spark.sql.functions._
+import fr.rennesmetropole.tools.Utils
 
 class ExecuteDechetPreparationTest {
-
+  val config = ConfigFactory.load()
+  val DEBUG = Utils.envVar("TEST_DEBUG")
   @Test
   def ExecuteDechetPreparationTest(): Unit = {
     val spark: SparkSession = SparkSession.builder()
@@ -48,10 +50,19 @@ class ExecuteDechetPreparationTest {
       .load("src/test/resources/Local/app/ExecuteDechetPreparation/Output/ExecuteDechetPreparationTestOutput.csv")
 
     spark.sparkContext.setLogLevel("WARN")
-    val args = Array("2021-01-01")
+    val args = Array("2022-01-01")
     ExecuteDechetPreparation.main(args) match {
-    case Right(dfPrepared) => assertEquals(0, dfPrepared.except(dfExpected).count())
+    case Right(dfPrepared) => {
+        if(DEBUG == "true"){
+            println(" =======  DATAFRAME PREPARED df_bac  =======  ") 
+            dfPrepared.show(false)
+            println(" =======  DATAFRAME EXPECTED df_bac  =======  ") 
+            dfExpected.show(false)
+        }
+        assertEquals(0, dfPrepared.except(dfExpected).count())
+        assertEquals(0, dfExpected.except(dfPrepared).count())
     }
+  }
   }
 
 }

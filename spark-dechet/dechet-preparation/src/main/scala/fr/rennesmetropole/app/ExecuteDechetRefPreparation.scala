@@ -6,7 +6,7 @@ import fr.rennesmetropole.tools.Utils
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object ExecuteDechetRefPreparation {
-  def main(args: Array[String]): Either[Unit, DataFrame] = {
+  def main(args: Array[String]): Either[Unit, (DataFrame,DataFrame)] = {
     val logger = Logger(getClass.getName)
 
     /** SYSDATE recupere la date actuelle de l'horloge systeme dans le fuseau horaire par defaut (UTC) */
@@ -113,24 +113,29 @@ object ExecuteDechetRefPreparation {
       }else if (!bacPrepareException && prodPrepareException){
         exception = exception + "ERROR : pas de donnees referentiel producteur recuperee, se referer aux logs pour savoir si le probleme viens de la preparation ou de la lecture "
       }
-      if(exception != ""){
+      if(exception != "" && Utils.envVar("TEST_MODE") == "False"){
         logger.error(exception)
-        throw new Exception(exception)
+       // throw new Exception(exception)
       }
+      if (Utils.envVar("TEST_MODE") == "False") {
+        if (!df_PreparationDechetRefProducer.head(1).isEmpty) {
+          Left(Utils.writeToS3(spark,df_PreparationDechetRefProducer, nameEnvProd,csv,SYSDATE))
+        }
+        else {
+          Right(df_PreparationDechetRefRecip,df_PreparationDechetRefProducer)
+        }
 
-       if (Utils.envVar("TEST_MODE") == "False" && (!df_PreparationDechetRefProducer.head(1).isEmpty)) {
-        Left(Utils.writeToS3(spark,df_PreparationDechetRefProducer, nameEnvProd,csv,SYSDATE))
+        if (!df_PreparationDechetRefRecip.head(1).isEmpty) {
+          Left(Utils.writeToS3(spark,df_PreparationDechetRefRecip, nameEnvRecip,csv,SYSDATE))
+        }
+        else {
+          Right(df_PreparationDechetRefRecip,df_PreparationDechetRefProducer)
+        }
       }
-      else {
-        Right(df_PreparationDechetRefProducer)
-      }
+      else{
+        Right(df_PreparationDechetRefRecip,df_PreparationDechetRefProducer)
+      }   
 
-      if (Utils.envVar("TEST_MODE") == "False" && (!df_PreparationDechetRefRecip.head(1).isEmpty)) {
-        Left(Utils.writeToS3(spark,df_PreparationDechetRefRecip, nameEnvRecip,csv,SYSDATE))
-      }
-      else {
-        Right(df_PreparationDechetRefRecip)
-      }
 
     } catch {
       case e: Throwable => {

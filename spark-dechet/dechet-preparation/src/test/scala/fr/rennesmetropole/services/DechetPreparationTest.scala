@@ -45,7 +45,7 @@ class DechetPreparationTest {
         .format("csv") // "minioSelectJSON" for JSON or "minioSelectParquet" for Parquet
         .schema(schema) // mandatory
         .option("delimiter", ";")
-        .load("src/test/resources/Local/services/preparation/DechetPreparationInput.csv")
+        .load("src/test/resources/Local/services/preparation/year=2022/month=01/day=01/DechetPreparationInput.csv")
 
     var dfExpected =  spark
       .read

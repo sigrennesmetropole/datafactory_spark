@@ -3,6 +3,7 @@ package fr.rennesmetropole.app
 import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.services.{DechetExutoirePreparation, ImportDechetExutoire}
 import fr.rennesmetropole.tools.Utils
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 
@@ -55,8 +56,8 @@ object ExecuteDechetExutoirePreparation {
     val nameEnv = "tableExutoire"
     try {
       val df_ImportDechetExutoire = ImportDechetExutoire.ExecuteImportDechetExutoire(spark, SYSDATE,nameEnv)
-      println("IMPORT EXUTOIRE")
-      df_ImportDechetExutoire.show(false)
+     // println("IMPORT EXUTOIRE")
+     // df_ImportDechetExutoire.show(false)
      
       var df_PreparationDechetExutoire = df_ImportDechetExutoire
       if(!df_ImportDechetExutoire.head(1).isEmpty){
@@ -66,6 +67,20 @@ object ExecuteDechetExutoirePreparation {
       }else {
         println("TEST Aucune donnee importe, skip du traitement...")
       }
+      println("Nombre de ligne a écrire : " + df_PreparationDechetExutoire.count())
+
+      df_PreparationDechetExutoire = df_PreparationDechetExutoire.filter(col("immat").isNotNull &&
+        col("date_service_vehic").isNotNull &&
+        col("description_tournee").isNotNull &&
+        col("km_realise").isNotNull &&
+        col("no_bon").isNotNull &&
+        col("lot").isNotNull &&
+        col("service").isNotNull &&
+        col("nom_rech_lieu_de_vidage").isNotNull &&
+        col("multiples_lignes").isNotNull &&
+        col("cle_unique_ligne_ticket").isNotNull
+      )
+      println("Nombre de ligne a écrire après suppression de ligne vide : " + df_PreparationDechetExutoire.count())
 
       /* val df_PreparationDechetExutoire = DechetExutoirePreparation.ExecuteDechetExutoirePreparation(spark, df_ImportDechetExutoire,nameEnv)
       println("PREPARED EXUTOIRE")

@@ -1,10 +1,9 @@
 package fr.rennesmetropole.services
 
 import com.typesafe.scalalogging.Logger
-import fr.rennesmetropole.tools.{UDF, Utils}
+import fr.rennesmetropole.tools.Utils
 import org.apache.spark.sql.catalyst.expressions.objects.AssertNotNull
-import org.apache.spark.sql.functions.{col, lit, udf, when}
-import org.apache.spark.sql.types.{DoubleType, IntegerType, StringType, FloatType}
+import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{Column, DataFrame, SparkSession}
 
 object DechetExutoirePreparation {
@@ -20,9 +19,9 @@ object DechetExutoirePreparation {
    */
 
   def ExecuteDechetExutoirePreparation(spark: SparkSession, df_raw_exutoire: DataFrame, nameEnv:String): DataFrame = {
-    /*var df_imported = df_raw_exutoire
+     //df_imported = df_raw_exutoire
     val(mapNbtoName,mapNametoParam) = Utils.getMap(spark,nameEnv)
-
+/*
     println("--------------df BEFORE renommageColonnes------------")
     df_imported.show(5)
 
@@ -35,26 +34,24 @@ object DechetExutoirePreparation {
     
     /* println("--------------df AFTER regexCharSpe------------") */
     val df_withoutAccentAndSpace = Utils.regexCharSpe(spark, df_raw_exutoire)
+      .select("immat","date_service_vehic","description_tournee","km_realise","no_bon","lot","service","nom_rech_lieu_de_vidage","multiples_lignes","cle_unique_ligne_ticket")
     /* df_withoutAccentAndSpace.show(5) */
 
-    /* println("--------------df AFTER lowerCaseAllHeader------------") */
-    val df_lowered = Utils.lowerCaseAllHeader(spark, df_withoutAccentAndSpace)
-    //df_lowered.show(5)
-    val df_typed = df_lowered.withColumn("immat",new Column(AssertNotNull(col("immat").cast(StringType).expr)))   
-      .withColumn("date_service_vehic",col("date_service_vehic").cast(StringType)) 
-      .withColumn("description_tournee",col("description_tournee").cast(StringType))  //ex IntegerType
-      .withColumn("km_realise",new Column(AssertNotNull(col("km_realise").cast(DoubleType).expr)))  //ex IntegerType
-      .withColumn("no_bon",col("no_bon").cast(StringType))
-      .withColumn("lot",col("lot").cast(StringType)) 
-      .withColumn("service",new Column(AssertNotNull(col("service").cast(DoubleType).expr))) //ex IntegerType
-      .withColumn("nom_rech_lieu_de_vidage",col("nom_rech_lieu_de_vidage").cast(StringType))
-      .withColumn("multiples_lignes",col("multiples_lignes").cast(DoubleType))
-      .withColumn("cle_unique_ligne_ticket", col("cle_unique_ligne_ticket").cast(StringType))  //ex FloatType
+    println("--------------df AFTER lowerCaseAllHeader df_lowered------------")
+    var df_lowered = Utils.lowerCaseAllHeader(spark, df_withoutAccentAndSpace)
+    df_lowered = Utils.castDF(spark,df_lowered,nameEnv,mapNametoParam)
+    println("--------------df_lowered après le cast------------")
+    df_lowered.printSchema()
+    df_lowered.show(5)
 
-    /* df_typed.printSchema()
+    val df_typed = df_lowered
+      .withColumn("immat",new Column(AssertNotNull(col("immat").expr)))
+      .withColumn("km_realise",new Column(AssertNotNull(col("km_realise").expr)))  //ex IntegerType
+      .withColumn("service",new Column(AssertNotNull(col("service").expr))) //ex IntegerType
 
-    println("--------------df_typed------------") */
-    df_typed.show(5) 
+    println("--------------df_typed------------")
+    df_typed.printSchema()
+    df_typed.show(5)
     df_typed
   }
 }

@@ -49,9 +49,6 @@
                   <mainClass>fr.rennesmetropole.app.ExecuteLoraAnalysis</mainClass>
                 </transformer>
               </transformers>
-              <transformers>
-                <transformer />
-              </transformers>
               <filters>
                 <filter>
                   <artifact>*:*</artifact>
@@ -66,34 +63,13 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <artifactId>maven-assembly-plugin</artifactId>
-        <version>3.3.0</version>
-        <executions>
-          <execution>
-            <id>make-assembly</id>
-            <phase>package</phase>
-            <goals>
-              <goal>single</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <descriptors>
-            <descriptor>src/assembly/delivery.xml</descriptor>
-          </descriptors>
-          <descriptorRefs>
-            <descriptorRef>jar-with-dependencies</descriptorRef>
-          </descriptorRefs>
-        </configuration>
-      </plugin>
     </plugins>
   </build>
   <dependencies>
     <dependency>
       <groupId>org.scalatest</groupId>
-      <artifactId>scalatest_2.11</artifactId>
-      <version>3.0.5</version>
+      <artifactId>scalatest_2.12</artifactId>
+      <version>3.0.8</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -104,13 +80,13 @@
     </dependency>
   </dependencies>
   <properties>
-    <scala.version>2.11.8</scala.version>
+    <scala.version>2.12.15</scala.version>
     <application.name>rm-traffic-analysis</application.name>
-    <scala.binary.version>2.11</scala.binary.version>
+    <scala.binary.version>2.12</scala.binary.version>
     <encoding>UTF-8</encoding>
-    <hadoop.version>3.3.1</hadoop.version>
+    <hadoop.version>3.3.2</hadoop.version>
     <maven.compiler.source>1.8</maven.compiler.source>
-    <spark.version>2.4.3</spark.version>
+    <spark.version>3.3.0</spark.version>
     <maven.compiler.target>1.8</maven.compiler.target>
   </properties>
 </project>

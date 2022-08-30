@@ -12,7 +12,8 @@ OPTIONS:
 __EOF__
 }
 
-while getopts "hd:t:" OPTION ; do
+while getopts "hd:t:a" OPTION ; do
+API=true
 	case $OPTION in
 		h)
 			usage
@@ -23,6 +24,9 @@ while getopts "hd:t:" OPTION ; do
 			;;
 		t) 
 			TYPE=$OPTARG
+			;;
+		a) 
+			API=$OPTARG
 			;;
 
 		*)
@@ -41,6 +45,7 @@ orange=$'\e[1;33m'
 grn=$'\e[1;32m'
 blu=$'\e[1;34m'
 end=$'\e[0m'
+api=""
 
 SCRIPT=$(readlink -f "$0")
 SCRIPTPATH=$(dirname "$SCRIPT")
@@ -60,12 +65,22 @@ then
 elif [ $TYPE == "exutoire" ];
 then
 	SPARKCLASS=${sparkClassExutoire}
+elif [ $TYPE == "collecteExposure" ];
+then
+	SPARKCLASS=${sparkClassCollecteExposure}
+elif [ $TYPE == "referentielExposure" ];
+then
+	SPARKCLASS=${sparkClassRefExposure}
+	if ! $API 
+	then
+		api="false"
+	fi
 else
 printf "${red}Something went wrong, we don't recognize the type of execution you want, you give $TYPE -> we want either collecte or ref ${end}\n"
-exit 0
+exit 1
 fi
-printf "${gre}docker exec ${CONTAINER_SPARK} --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file= ${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW  ${end}\n"
-docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW 
+printf "${gre}docker exec ${CONTAINER_SPARK} --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file= ${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW $api ${end}\n"
+docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW $api
 
 
 

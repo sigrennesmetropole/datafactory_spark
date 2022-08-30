@@ -1,19 +1,20 @@
 package fr.rennesmetropole.tools
 
-import com.typesafe.config.ConfigFactory
+import com.typesafe.config.{Config, ConfigFactory}
 import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.services.DechetAnalysis.typeFrequence
 import fr.rennesmetropole.services.ImportDechet.{createEmptyBacDataFrame, createEmptyCollecteDataFrame, createEmptyExutoireDataFrame, createEmptyProducteurDataFrame}
+import org.apache.commons.lang3.StringUtils.stripAccents
 import org.apache.spark.sql._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.types.{StringType, StructField, StructType, TimestampType}
+import org.apache.spark.sql.types._
 
 import java.sql.{Connection, DriverManager, SQLException, Timestamp}
 import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
+import java.util
 import java.util.Properties
-import java.math.BigInteger 
 
 object Utils {
 
@@ -65,59 +66,182 @@ object Utils {
     * @return Dataframe
     */
     def readData(spark: SparkSession, DATE: String, nameEnv:String ): DataFrame = {
-    val URL = tableVar(nameEnv, "out_bucket")
-    
-    if(Utils.envVar("TEST_MODE") == "False") {
 
-      /* calcul du chemin pour lire les données sur minio */
-      val postURL = date2URL(DATE)
-      println("URL de lecture sur Minio : " + URL + postURL)
+      if (Utils.envVar("TEST_MODE") == "False") {
+        val URL = tableVar(nameEnv, "out_bucket")
+        /* calcul du chemin pour lire les données sur minio */
+        val postURL = date2URL(DATE)
+        println("URL de lecture sur Minio : " + URL + postURL)
 
-         try {
-        spark
+        try {
+          spark
             .read
-            .orc(URL+postURL)
-          
+            .orc(URL + postURL)
+
         } catch {
-          case e : Throwable =>
-          println("ERROR while reading data at : " + URL+postURL + " \nError stacktrace :"+ e)
-            if("tableProducteur".equals(nameEnv))
+          case e: Throwable =>
+            println("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
+            if ("tableProducteur".equals(nameEnv))
               createEmptyProducteurDataFrame(spark, DATE)
-            else if("tableRecipient".equals(nameEnv))
+            else if ("tableRecipient".equals(nameEnv))
               createEmptyBacDataFrame(spark, DATE)
-            else if("tableCollecte".equals(nameEnv))
+            else if ("tableCollecte".equals(nameEnv))
               createEmptyCollecteDataFrame(spark)
-            else if("tableExutoire".equals(nameEnv))
+            else if ("tableExutoire".equals(nameEnv))
               createEmptyExutoireDataFrame(spark)
-            else
-              null
+            else {
+              val schemaTest = StructType(
+                List(
+                  StructField("id_test", StringType, false)
+                )
+              )
+              spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schemaTest)
+            }
         }
 
 
-    // else... si nous somme en mode TEST
-    }else {
-        if(DATE == "WrongDate") {
-          if("tableProducteur".equals(nameEnv))
+        // else... si nous somme en mode TEST
+      } else {
+        val URL = tableVar(nameEnv, "test_bucket")
+        val postURL = date2URL(DATE)
+        println("URL LECTURE TEST : " + URL + postURL)
+        if (DATE == "WrongDate") {
+          if ("tableProducteur".equals(nameEnv))
             createEmptyProducteurDataFrame(spark, DATE)
-          else if("tableRecipient".equals(nameEnv))
+          else if ("tableRecipient".equals(nameEnv))
             createEmptyBacDataFrame(spark, DATE)
-          else if("tableCollecte".equals(nameEnv))
+          else if ("tableCollecte".equals(nameEnv))
             createEmptyCollecteDataFrame(spark)
-          else if("tableExutoire".equals(nameEnv))
+          else if ("tableExutoire".equals(nameEnv))
             createEmptyExutoireDataFrame(spark)
-          else
-            null
-        }else {
+          else {
+            val schemaTest = StructType(
+              List(
+                StructField("id_test", StringType, false)
+              )
+            )
+            spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schemaTest)
+          }
+        } else {
           spark
             .read
             .option("header", "true")
-            .option("compression", "gzip")
             .format("csv")
             .option("delimiter", ";")
-            .load(URL)
+            .load(URL + postURL)
 
         }
+      }
     }
+
+  /**
+   *
+   * @param spark  : la session spark
+   * @param url    : url complète du stockage
+   * @param schema : le schéma des données à lire
+   * @return Dataframe
+   */
+  def readDataPath(spark: SparkSession, DATE: String, nameEnv:String ,namePath:String,typeFile:String): DataFrame = {
+
+    if (Utils.envVar("TEST_MODE") == "False") {
+      val URL = tableVar(nameEnv, namePath)
+      /* calcul du chemin pour lire les données sur minio */
+      val postURL = date2URL(DATE)
+      println("URL de lecture sur Minio : " + URL + postURL)
+      try {
+        typeFile match {
+          case "csv" =>
+            spark
+              .read
+              .option("header", "true")
+              .option("compression", "gzip")
+              .format("csv")
+              .option("delimiter", ";")
+              .load(URL+postURL)
+          case "orc" =>
+            spark
+              .read
+              .orc(URL + postURL)
+
+        }
+      } catch {
+        case e: Throwable =>
+          println("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
+          if ("tableProducteur".equals(nameEnv))
+            createEmptyProducteurDataFrame(spark, DATE)
+          else if ("tableRecipient".equals(nameEnv))
+            createEmptyBacDataFrame(spark, DATE)
+          else if ("tableCollecte".equals(nameEnv))
+            createEmptyCollecteDataFrame(spark)
+          else if ("tableExutoire".equals(nameEnv))
+            createEmptyExutoireDataFrame(spark)
+          else {
+            val schemaTest = StructType(
+              List(
+                StructField("id_test", StringType, false)
+              )
+            )
+            spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schemaTest)
+          }
+      }
+
+
+      // else... si nous somme en mode TEST
+    } else {
+      val URL = tableVar(nameEnv, namePath)
+
+      val postURL = date2URL(DATE)
+      println("URL LECTURE TEST : " + URL + postURL)
+      if (DATE == "WrongDate") {
+        if ("tableProducteur".equals(nameEnv))
+          createEmptyProducteurDataFrame(spark, DATE)
+        else if ("tableRecipient".equals(nameEnv))
+          createEmptyBacDataFrame(spark, DATE)
+        else if ("tableCollecte".equals(nameEnv))
+          createEmptyCollecteDataFrame(spark)
+        else if ("tableExutoire".equals(nameEnv))
+          createEmptyExutoireDataFrame(spark)
+        else {
+          val schemaTest = StructType(
+            List(
+              StructField("id_test", StringType, false)
+            )
+          )
+          spark.createDataFrame(spark.sparkContext.emptyRDD[Row], schemaTest)
+        }
+      } else {
+        typeFile match {
+          case "csv" =>
+            spark
+              .read
+              .option("header", "true")
+              .option("compression", "gzip")
+              .format("csv")
+              .option("delimiter", ";")
+              .load(URL+postURL)
+          case "orc" =>
+            spark
+              .read
+              .orc(URL + postURL)
+        }
+      }
+    }
+  }
+
+  def readSmartData(spark: SparkSession, DATE: String, nameEnv:String ): DataFrame = {
+    val URL = tableVar(nameEnv,"analysed_bucket")
+    /* calcul du chemin pour lire les données sur minio */
+    val postURL = date2URL(DATE)
+    println("URL de lecture sur Minio : " + URL + postURL+"orc/")
+    try {
+      spark
+        .read
+        .orc(URL + postURL+"orc/")
+    } catch {
+      case e : Throwable =>
+        println("ERROR while reading data at : " + URL+postURL +"orc/"+ " \nError stacktrace :"+ e)
+        spark.emptyDataFrame
+      }
     }
 
     /**
@@ -128,12 +252,18 @@ object Utils {
     */
     def date2URL(DATE: String): String = {
       val date = DATE.split("-") // donne la date sous forme yyyy-mm-dd
+      var postURL=""
       val year = date(0);
       val month = date(1);
-      val day = date(2);
-      val postURL = "year=" + year + "/month=" + month + "/day=" + day + "/";
+      if(date.length >=3){
+        val day = date(2);
+        postURL = "year=" + year + "/month=" + month + "/day=" + day + "/";
+      }else{
+        postURL = "year=" + year + "/month=" + month
+      }
+      postURL
 
-      return postURL
+
     }
 
   /**
@@ -224,7 +354,7 @@ object Utils {
     try{
       Class.forName(driverClass);
       connObj = DriverManager.getConnection(pgUrl,  Utils.envVar("POSTGRES_ACCESS_KEY"), Utils.envVar("POSTGRES_SECRET_KEY"));
-      var stringDelete = "TRUNCATE TABLE "+ table_name
+      var stringDelete = "TRUNCATE TABLE "+ table_name + " CASCADE"
       val statement = connObj.prepareStatement(stringDelete)
       try{
           number_of_rows_deleted = statement.executeUpdate();
@@ -269,12 +399,12 @@ object Utils {
       .mode(SaveMode.Append)
       .csv(Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
-    if("tableProducteur".equals(nameEnv) || "tableRecipient".equals(nameEnv) ) {
+    df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+      .write
+      .mode(SaveMode.Append)
+      .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/")
 
-      df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
-        .write
-        .mode(SaveMode.Append)
-        .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/")
+    if("tableProducteur".equals(nameEnv) || "tableRecipient".equals(nameEnv) ) {
 
       val schema = StructType(
         List(
@@ -289,6 +419,26 @@ object Utils {
         .mode(SaveMode.Append)
         .format("orc")
         .save(Utils.tableVar(nameEnv,"analysed_bucket") + "latest")
+    }
+
+    println("Write to s3 Done")
+  }
+
+  def writeToS3ForPatchOrc(spark: SparkSession, df_toWrite: DataFrame, nameEnv :String, DATE :String): Unit = {
+    val postURL = date2URL(DATE)
+    println("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
+
+    df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+      .write.options(Map("header"->"true", "delimiter"->";","compression"->"gzip"))
+      .mode(SaveMode.Append)
+      .csv(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"patch/")
+
+    if("tableRecipient".equals(nameEnv) ) {
+      println("Application, du patch en cours...")
+      df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+        .write
+        .mode(SaveMode.Append)
+        .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/patch/")
     }
 
     println("Write to s3 Done")
@@ -413,4 +563,229 @@ object Utils {
     udf(idProducteur)
   }
 
+  def type_flux_UDF(mode:String): UserDefinedFunction = {
+    mode match {
+      case "pre_flux" =>
+        val type_flux = (categorie_recipient:String,code_immat:String) =>{Utils.type_flux(categorie_recipient,code_immat) }
+        udf(type_flux)
+      case "post_flux" =>
+        val type_flux = (type_flux:String,code_immat:String,categorie_recipient_moyen:String) =>{Utils.type_flux(type_flux,code_immat,categorie_recipient_moyen) }
+        udf(type_flux)
+    }
+  }
+
+  def type_flux(categorie_recipient:String,code_immat:String):String={
+    (stripAccents(categorie_recipient),code_immat) match {
+      case (null,y) =>
+        if(y!=null){
+          "Inconnu_connu"
+        }else {
+          "Inconnu"
+        }
+      case (x,_) if x.contains("Bacs ordures menageres") =>
+        "OM"
+      case (x,_) if x.contains("Bacs collecte selective") =>
+        "CS"
+      case (x,_) if x.contains("Bacs verre") =>
+        "verre"
+      case (x,_) if x.contains("Bacs biodechets") =>
+        "Biodechets"
+      case (x,_) if x.contains("OM") =>
+        "OM"
+      case (x,_) if x.contains("CS") =>
+        "CS"
+      case (x,_) if x.contains("VE") =>
+        "Verre"
+      case (x,_) if x.contains("BIO") =>
+        "Biodechets"
+      case (x,_) if (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs")) =>
+        "Autres"
+      case _ =>
+        "Inconnu"
+    }
+  }
+  def type_flux(categorie_recipient:String,code_immat:String,categorie_recipient_moyen:String):String={
+    (stripAccents(categorie_recipient),code_immat,categorie_recipient_moyen) match {
+      case (null,y,_) =>
+        if(y!=null){
+          "Inconnu_connu"
+        }else {
+          "Inconnu"
+        }
+      case (x,_,z) if x.contains("Inconnu_connu") =>
+        z
+      case (x,_,_) if x.contains("Bacs ordures menageres") =>
+        "OM"
+      case (x,_,_) if x.contains("Bacs collecte selective") =>
+        "CS"
+      case (x,_,_) if x.contains("Bacs verre") =>
+        "verre"
+      case (x,_,_) if x.contains("Bacs biodechets") =>
+        "Biodechets"
+      case (x,_,_) if x.contains("OM") =>
+        "OM"
+      case (x,_,_) if x.contains("CS") =>
+        "CS"
+      case (x,_,_) if x.contains("VE") =>
+        "verre"
+      case (x,_,_) if x.contains("BIO") =>
+        "Biodechets"
+      case (x,_,_) if (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs")) =>
+        "Autres"
+      case _ =>
+        "Inconnu"
+    }
+  }
+
+  def redressementUDF():UserDefinedFunction = {
+    val redressement = (code_tournee:String, poids:String,typeFlux:String) =>{Utils.redressementCollecte(code_tournee,poids,typeFlux) }
+    udf(redressement)
+  }
+
+  def redressementCollecte(code_tournee:String,poids:String,typeFlux:String):String={
+    (typeFlux,poids.toDouble) match {
+      case ("OM",poids) =>
+        if(0<poids && poids<120){
+          poids.toString
+        }else {
+          "0"
+        }
+      case ("CS",poids) =>
+        if(0<poids && poids<40){
+          poids.toString
+        }else {
+          "0"
+        }
+      case ("Verre",poids) =>
+        if(0<poids && poids<240){
+          poids.toString
+        }else {
+          "0"
+        }
+      case (x,poids) if (x.contains("Biodechets") || x.contains("Inconnu") || x.contains("Autres"))=>
+        if(0<poids && poids<250){
+          poids.toString
+        }else {
+          "0"
+        }
+      case _ =>
+        "0"
+    }
+  }
+
+  def redressementCorrectionInvalideUDF(mapMoyenneBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneBacInconnu:Double):UserDefinedFunction = {
+    val redressement = (typeFlux:String,litrage_recipient:String,poids_corr:String) =>{Utils.redressementCorrectionInvalide(typeFlux,litrage_recipient,poids_corr,mapMoyenneBacRattache,mapMoyenneSansBacRattache,mapMoyenneBacInconnu) }
+    udf(redressement)
+  }
+  def redressementCorrectionInvalide(typeFlux:String,litrage_recipient:String,poids_corr:String,mapMoyenneBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneBacInconnu:Double):String={
+    (typeFlux,litrage_recipient,poids_corr) match {
+      case (_,_,poids_corr) if(poids_corr != null) =>
+
+         BigDecimal(poids_corr).setScale(2, BigDecimal.RoundingMode.HALF_UP).toString.replace(".00",".0")
+
+      case ("Autres",_,_)  =>
+        mapMoyenneBacInconnu.toString
+      //correction des données dechet qui ne sont pas rattaché a des bacs
+      case ("OM",null,_) =>
+        mapMoyenneSansBacRattache.get("OMglobal").toString
+      case ("CS",null,_) =>
+        mapMoyenneSansBacRattache.get("CSglobal").toString
+      case ("Verre",null,_)  =>
+        mapMoyenneSansBacRattache.get("VEglobal").toString
+      case ("Biodéchets",null,_) =>
+        mapMoyenneSansBacRattache.get("BIOglobal").toString
+      // correction des données dechets qui sont rattaché a des bacs mais qui n'ont pas au moins 6 valeur historisé
+      case ("OM",litrage,_) if(litrage.matches("1|120|140")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM140"))
+      case ("OM",litrage,_) if(litrage.matches("180")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM180"))
+      case ("OM",litrage,_) if(litrage.matches("240")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM240"))
+      case ("OM",litrage,_) if(litrage.matches("330|340|360")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM360"))
+      case ("OM",litrage,_) if(litrage.matches("400")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM400"))
+      case ("OM",litrage,_) if(litrage.matches("500|600")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM660"))
+      case ("OM",litrage,_) if(litrage.matches("750|770|1000")) =>
+        OptionToValue(mapMoyenneBacRattache.get("OM770"))
+      case ("CS",litrage,_) if(litrage.matches("1|120|140")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS140"))
+      case ("CS",litrage,_) if(litrage.matches("180")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS180"))
+      case ("CS",litrage,_) if(litrage.matches("240")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS240"))
+      case ("CS",litrage,_) if(litrage.matches("330|340|360")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS360"))
+      case ("CS",litrage,_) if(litrage.matches("500|600")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS660"))
+      case ("CS",litrage,_) if(litrage.matches("750|770|1000")) =>
+        OptionToValue(mapMoyenneBacRattache.get("CS770"))
+      case ("Verre",litrage,_) if(litrage.matches("240")) =>
+        OptionToValue(mapMoyenneBacRattache.get("VE240"))
+      case ("Verre",litrage,_) if(litrage.matches("400|660")) =>
+        OptionToValue(mapMoyenneBacRattache.get("VE400"))
+      case ("Verre",litrage,_) if(litrage.matches("750|770|1000")) =>
+        OptionToValue(mapMoyenneBacRattache.get("VE770"))
+      case ("Biodéchets",litrage,_) if(litrage.matches("120|140")) =>
+        OptionToValue(mapMoyenneBacRattache.get("BIO140"))
+      case ("Biodéchets",litrage,_) if(litrage.matches("240")) =>
+        OptionToValue(mapMoyenneBacRattache.get("BIO240"))
+      case ("Biodéchets",litrage,_) if(litrage.matches("400")) =>
+        OptionToValue(mapMoyenneBacRattache.get("BIO400"))
+    }
+  }
+
+  /**
+   *
+   * @param option_value valeur dont il faut l'extraire la valeur
+   * @return  la valeur sans le Some(*)
+   */
+  def OptionToValue(option_value: Option[Double]): String = {
+    option_value match {
+      case None => "None"
+      case Some(value) => value.toString
+    }
+  }
+  /**
+   * permet d'afficher ou non les dataframes dans les différentes étapes selon le niveau de log souhaité
+   */
+  def show (df:DataFrame,desc:String = null):Unit = {
+    val debug = envVar("debugShow")
+    debug match {
+      case "1" =>
+        if (desc != null) {
+          println (desc)
+        }
+
+      case "2" =>
+        if (desc != null) {
+          println (desc)
+        }
+        df.show (50,false)
+
+      case "3" =>
+        if (desc != null) {
+          println (desc)
+        }
+        df.show (100000000,false)
+      case _ => 
+        }
+
+  }
+
+    def getIterator(nameEnv:String, name: String):util.Iterator[_ <: Config] = {
+      val listFields = config.getConfigList(nameEnv + "." +name) 
+      listFields.iterator()
+  }
+
+    def getListName(nameEnv:String): Seq[String]={
+    val iterator = Utils.getIterator(nameEnv,"fields")
+      var list = List[String]()
+      while(iterator.hasNext){
+        val current = iterator.next
+        list =list :+ current.getString("name")
+      }
+    list
+  }
 }

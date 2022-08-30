@@ -1,28 +1,20 @@
 package fr.rennesmetropole.tools
 
 import com.typesafe.config.ConfigFactory
-import org.apache.spark.sql.execution.streaming.FileStreamSource.Timestamp
-import org.apache.spark.sql.functions.{to_utc_timestamp, _}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
-import org.joda.time.format.DateTimeFormatter
-import org.joda.time.format.DateTimeFormat
 import org.apache.spark.sql.Row
-import org.apache.spark.sql.types._
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.functions.{concat_ws, lit}
-import org.apache.spark.sql.Column
 import java.util.Properties
 import java.sql.Connection
-import java.sql.DatabaseMetaData
 import java.sql.DriverManager
 import java.sql.SQLException
-import java.time.LocalDate
-import org.slf4j.{Logger, LoggerFactory}
 
 
 import java.text.SimpleDateFormat
-import java.util.{Calendar, Date, Properties, TimeZone}
+import java.util.{Calendar, Date}
 
 
 object Utils {
