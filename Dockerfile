@@ -32,6 +32,6 @@ COPY spark.conf /opt/bitnami/spark/conf/spark-defaults.conf
 COPY --from=build-trafic /workspace-trafic/target/rm-traffic-analysis-*.jar /app-trafic/target/rm-traffic-analysis.jar
 COPY --from=build-lora /workspace-lora/target/rm-lora-analysis-*.jar /app-lora/target/rm-lora-analysis.jar
 COPY --from=build-dechets /workspace-dechets/dechet-preparation/target/rm-dechet-preparation-*.jar /app-dechets/dechet-preparation/target/rm-dechet-preparation.jar
-COPY --from=build-dechets /workspace-dechets/dechet-analysis/target/rm-dechet-analysis-*.jar /app-trafic/dechet-analysis/target/rm-dechet-analysis.jar
+COPY --from=build-dechets /workspace-dechets/dechet-analysis/target/rm-dechet-analysis-*.jar /app-dechets/dechet-analysis/target/rm-dechet-analysis.jar
 
 WORKDIR /opt/bitnami/spark/
