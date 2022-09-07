@@ -1,7 +1,6 @@
 package fr.rennesmetropole.tools
 
 import com.typesafe.config.{Config, ConfigFactory}
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.services.DechetAnalysis.typeFrequence
 import fr.rennesmetropole.services.ImportDechet.{createEmptyBacDataFrame, createEmptyCollecteDataFrame, createEmptyExutoireDataFrame, createEmptyProducteurDataFrame}
 import org.apache.commons.lang3.StringUtils.stripAccents
@@ -15,12 +14,17 @@ import java.time.format.DateTimeFormatter
 import java.time.{ZoneId, ZonedDateTime}
 import java.util
 import java.util.Properties
+import org.apache.logging.log4j.{Level, LogManager}
 
 object Utils {
 
-  val logger = Logger(getClass.getName)
+  val logger = LogManager.getLogger(getClass.getName)
+  val USER_LOG = Level.forName("DATA FACTORY", 200);
   var config = ConfigFactory.load()
 
+def log(msg:String):Unit ={
+  logger.log(USER_LOG, msg)
+}
   /**
    *
    * @param name : nom de la configuration
@@ -162,6 +166,10 @@ object Utils {
             spark
               .read
               .orc(URL + postURL)
+          case "smart_orc" =>
+            spark
+              .read
+              .orc(URL + postURL +"/orc")
 
         }
       } catch {
@@ -755,7 +763,7 @@ object Utils {
     debug match {
       case "1" =>
         if (desc != null) {
-          println (desc)
+          println(desc)
         }
 
       case "2" =>

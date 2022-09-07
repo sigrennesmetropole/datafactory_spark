@@ -1,8 +1,7 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.show
+import fr.rennesmetropole.tools.Utils.{show,logger}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -13,7 +12,6 @@ import java.time.Instant
 import java.util.Properties
 
 object DechetAnalysis {
-  val logger = Logger(LoggerFactory.getLogger(this.getClass))
   val frTZ = java.time.ZoneId.of("Europe/Paris")
   var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
 
@@ -140,7 +138,7 @@ object DechetAnalysis {
     ("VE770", "Bacs verre", ("750-770-1000"), 72.1))
     //liste pour calculer les moyennes globales même mois année-1 sans bac rattaché
     var liste_flux = Array(("OMglobal", "OM", 17.8), ("CSglobal", "CS", 9.2), ("BIOglobal", "BIO", 53.5), ("VEglobal", "VE", 60.5))
-    val df_join = df_support.join(df_refBac,Seq("id_bac"),"left")
+    val df_join = broadcast(df_support).join(df_refBac,Seq("id_bac"),"left")
     show(df_refBac,"df_refBac")
     show(df_join,"df_join")
     //calcul des moyennes pour les pesé avec bac rattaché et pour chaque type de récipient
@@ -302,7 +300,7 @@ object DechetAnalysis {
   }
 
   def updatedProducteurTreatment(df_latestProducteur: DataFrame, df_partitionedIncomingProducteur: DataFrame, datePhoto: String) = {
-    var df_updated = df_latestProducteur.filter(col("date_fin").isNull).join(df_partitionedIncomingProducteur, df_latestProducteur("code_producteur")
+    var df_updated = df_latestProducteur.filter(col("date_fin").isNull).join(broadcast(df_partitionedIncomingProducteur), df_latestProducteur("code_producteur")
       === df_partitionedIncomingProducteur("code_producteur"), "inner")
       .drop(df_partitionedIncomingProducteur("date_crea"))
       .drop(df_partitionedIncomingProducteur("date_fin"))
@@ -393,8 +391,9 @@ object DechetAnalysis {
       .count().filter("count > 1")
 
     // Producteurs non changes
-    val df_notChanged = latestActive.filter(col("code_producteur").isInCollection(
-      df_duplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
+    val df_notChanged = latestActive.join(df_duplicated.filter(col("code_producteur").isNotNull),Seq("code_producteur"),"left_semi")
+      //latestActive.filter(col("code_producteur").isInCollection(
+      //df_duplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
     show(df_notChanged,"Producteur inchanges")
 
@@ -402,8 +401,9 @@ object DechetAnalysis {
       .groupBy("code_producteur","id_rva","commune","code_insee","type_producteur","activite","latitude","longitude")
       .count().filter("count = 1")
 
-    val df_changed = latestActive.filter(col("code_producteur").isInCollection(
-      df_notduplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
+    val df_changed = latestActive.join(df_notduplicated.filter(col("code_producteur").isNotNull),Seq("code_producteur"),"left_semi")
+      //latestActive.filter(col("code_producteur").isInCollection(
+      //df_notduplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
     show(df_changed,"Producteur changes")
     
@@ -444,13 +444,15 @@ object DechetAnalysis {
     // re attribution des id_producteur si le code_proucteur n'a pas changé
     var df_id_latest = df_latestRecipient.select("code_producteur","id_producteur").withColumnRenamed("id_producteur","id_producteur_latest")
     var df_id_incoming = df_partitionedIncomingRecipient.select("code_producteur","id_producteur").withColumnRenamed("id_producteur","id_producteur_incoming")
-
-    val df_id_join = df_id_incoming.join(df_id_latest,Seq("code_producteur"),"full_outer")
+    val df_id_join = df_id_incoming.repartition(col("code_producteur")).join(df_id_latest.repartition(col("code_producteur")),Seq("code_producteur"),"left")
         .withColumn("id_producteur_temp", when(col("id_producteur_latest").isNull,df_id_incoming("id_producteur_incoming") )
         .otherwise(df_id_latest("id_producteur_latest")))
         .select("code_producteur", "id_producteur_temp")
         .withColumnRenamed("id_producteur_temp","id_producteur")
+        .dropDuplicates()
     df_partitionedIncomingRecipient = df_partitionedIncomingRecipient.drop("id_producteur").join(df_id_join,Seq("code_producteur"), "inner")
+    show(df_partitionedIncomingRecipient,"df_partitionedIncomingRecipient")
+
     // Recuperation des bacs inconnus
     val dfUnknown = df_latestRecipient.filter(col("code_puce") === "null"
                                               || col("code_puce") === "INCONNU")
@@ -471,8 +473,9 @@ object DechetAnalysis {
 
     show(df_duplicated,"df_duplicated")
     // Recipient non changes
-    val df_notChanged = latestActive.filter(col("code_puce").isInCollection(
-      df_duplicated.select("code_puce").filter(col("code_puce").isNotNull).rdd.map(row => row(0)).collect().toList))
+    val df_notChanged = latestActive.join(df_duplicated.filter(col("code_puce").isNotNull),Seq("code_puce"),"left_semi")
+      //latestActive.filter(col("code_puce").isInCollection(
+      //df_duplicated.select("code_puce").filter(col("code_puce").isNotNull).rdd.map(row => row(0)).collect().toList))
 
     show(df_notChanged,"Bacs inchanges")
 
@@ -480,8 +483,9 @@ object DechetAnalysis {
       .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte")
       .count().filter("count = 1")
     show(df_notduplicated,"df_notduplicated")
-    val df_changed = latestActive.filter(col("code_puce").isInCollection(
-      df_notduplicated.select("code_puce").filter(col("code_puce").isNotNull && col("code_puce") =!= "INCONNU" && col("code_puce") =!= "null").rdd.map(row => row(0)).collect().toList))
+    val df_changed = latestActive.join(df_notduplicated.filter(col("code_puce").isNotNull),Seq("code_puce"),"left_semi")
+      //latestActive.filter(col("code_puce").isInCollection(
+      //df_notduplicated.select("code_puce").filter(col("code_puce").isNotNull && col("code_puce") =!= "INCONNU" && col("code_puce") =!= "null").rdd.map(row => row(0)).collect().toList))
 
     show(df_changed,"Bacs changes")
 
@@ -535,15 +539,21 @@ object DechetAnalysis {
    */
   def deletedRecipientTreatment(df_preparedIncomingRecipient : DataFrame, datePhoto: String,
                                 df_latest : DataFrame) : DataFrame = {
-    val dfDeleted = df_latest.join(df_preparedIncomingRecipient,
+    /*println("count df_preparedIncomingRecipient :" + df_preparedIncomingRecipient.count())
+    show(df_preparedIncomingRecipient,"Bac df_preparedIncomingRecipient")
+    println("count df_latest :" + df_latest.count())
+    show(df_latest,"Bac df_latest")*/
+    val dfDeleted = df_latest.join(df_preparedIncomingRecipient.repartition(1000,col("code_puce")),
                   df_latest("code_puce") === df_preparedIncomingRecipient("code_puce"), "left_anti")
-                  .filter(not(col("code_puce").isNull || col("code_puce") === "INCONNU" || col("code_puce") === "null")
+    show(dfDeleted,"Bac dfDeleted")
+    val dfDeleted2 = dfDeleted.repartition(col("code_puce")).filter(not(col("code_puce").isNull || col("code_puce") === "INCONNU" || col("code_puce") === "null")
                   && col("date_fin").isNull )
-                  .withColumn("date_fin",
+    show(dfDeleted2,"Bac dfDeleted2")
+    val dfDeleted3 = dfDeleted2.withColumn("date_fin",
                               Utils.timestampWithZoneUdf()(lit(datePhoto),lit("000000")).cast(TimestampType))
                   .withColumn("date_modif",
                     lit(now).cast(TimestampType))
-    show(dfDeleted,"Bac supprimes")
+    show(dfDeleted3,"Bac supprimes")
 
     dfDeleted
   }
@@ -642,7 +652,7 @@ object DechetAnalysis {
    */
   def joinLatestBacAndLatestProducteur(df_lastestBac: DataFrame, df_latestProducteur: DataFrame): DataFrame = {
     val df_lastestBacFiltered = df_latestProducteur.select("id_producteur")
-    val dfJoined = df_lastestBac.join(df_lastestBacFiltered, df_lastestBac("id_producteur")
+    val dfJoined = (df_lastestBac).join(df_lastestBacFiltered, df_lastestBac("id_producteur")
         === df_lastestBacFiltered("id_producteur"), "left")
       .drop(df_lastestBac("id_producteur"))
 
@@ -652,7 +662,7 @@ object DechetAnalysis {
   def updatedRecipientTreatment(df_lastestBac: DataFrame, dfIncoming: DataFrame, datePhoto: String): DataFrame = {
     show(df_lastestBac,"df_lastestBac")
     show(dfIncoming,"dfIncoming")
-    var df_updated = df_lastestBac.filter(col("date_fin").isNull).join(dfIncoming, df_lastestBac("code_puce")
+    var df_updated = broadcast(df_lastestBac).filter(col("date_fin").isNull).join(dfIncoming, df_lastestBac("code_puce")
       === dfIncoming("code_puce"), "inner")
       .drop(dfIncoming("date_crea"))
       .drop(dfIncoming("date_fin"))

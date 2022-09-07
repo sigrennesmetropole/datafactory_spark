@@ -2,13 +2,12 @@ package fr.rennesmetropole.services
 
 import java.util.Properties
 import com.typesafe.config.{Config, ConfigFactory}
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
+import fr.rennesmetropole.tools.Utils.logger
 import javax.mail._
 import javax.mail.internet._
 
 object MailAgent {
-  private val logger = Logger[this.type]
 
   private val config: Config = ConfigFactory.load()
   private val to : String = Utils.tableVar("email","to")

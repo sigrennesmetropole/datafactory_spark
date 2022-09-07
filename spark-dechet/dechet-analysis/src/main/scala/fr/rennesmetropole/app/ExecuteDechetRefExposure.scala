@@ -1,11 +1,11 @@
 package fr.rennesmetropole.app
 
-import com.typesafe.scalalogging.LazyLogging
 import fr.rennesmetropole.services.ImportDechet
 import fr.rennesmetropole.tools.Utils
+import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
-object ExecuteDechetRefExposure extends LazyLogging{
+object ExecuteDechetRefExposure {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
     var SYSDATE = java.time.LocalDate.now.toString

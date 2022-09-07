@@ -1,8 +1,7 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.{show, tableVar}
+import fr.rennesmetropole.tools.Utils.{show, tableVar, logger}
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, row_number}
 import org.apache.spark.sql.types._
@@ -13,7 +12,6 @@ import java.sql.Timestamp
 
 object ImportDechet {
 
-  val logger = Logger(getClass.getName)
 
   /**
    * Declare un dataframe via la lecture par date dans MinIO 
@@ -76,15 +74,16 @@ object ImportDechet {
     val URL = tableVar(nameEnv, "analysed_bucket")
     if(Utils.envVar("TEST_MODE") == "False") {
     try {
+      println("Lecture data latest...")
       val pathDf = spark
         .read
         .orc(URL+"latest")
-      show(pathDf)
+      pathDf.show()
 
       val readDf = spark
         .read.options(Map("header"->"true", "delimiter"->";"))
         .orc(URL+pathDf.orderBy(col("date").desc).first().getAs("path"))
-      show(readDf)
+      readDf.show()
       readDf
     } catch {
       case e : Throwable =>

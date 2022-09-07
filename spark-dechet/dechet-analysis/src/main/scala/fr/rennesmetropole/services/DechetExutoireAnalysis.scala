@@ -1,9 +1,9 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
+
 import fr.rennesmetropole.services.ImportDechet.createEmptyExutoireDataFrame
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.show
+import fr.rennesmetropole.tools.Utils.{show,logger}
 import org.apache.spark.sql._
 
 import java.sql.Timestamp
@@ -13,7 +13,6 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types.TimestampType
 
 object DechetExutoireAnalysis {
-  val logger = Logger(getClass.getName)
   val frTZ = java.time.ZoneId.of("Europe/Paris")
   var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
   def setNow(now_test:Instant):Unit ={
@@ -78,8 +77,7 @@ object DechetExutoireAnalysis {
         show(df_tri3,"df_tri3")
         df_tri3
       }catch{
-        case e:Throwable => 
-        val logger = Logger(getClass.getName)
+        case e:Throwable =>
         logger.error("ERROR durant l'enrichissement ExecuteDechetExutoireAnalysis()\n" +e)
           createEmptyExutoireDataFrame(spark)
       }
