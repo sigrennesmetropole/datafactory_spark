@@ -1,13 +1,12 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
+import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 
 object ImportDechetExutoire {
 
-  val logger = Logger(getClass.getName)
 
   /**
    * Declare un dataframe via la lecture par date dans MinIO 

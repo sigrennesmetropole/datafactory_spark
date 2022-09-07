@@ -1,16 +1,14 @@
 package fr.rennesmetropole.app
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.services.{DechetAnalysis, ImportDechet}
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.show
+import fr.rennesmetropole.tools.Utils.{show,logger}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.time.Instant
 
 object ExecuteDechetRedressement {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
-    val logger = Logger(getClass.getName)
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
     var SYSDATE = java.time.LocalDate.now.toString
     try {

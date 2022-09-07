@@ -1,24 +1,24 @@
 package fr.rennesmetropole.app
 
-
 import fr.rennesmetropole.services.MailAgent.{mail_template, sendMail}
 import fr.rennesmetropole.services.{DechetAnalysis, ImportDechet}
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.{logger, show}
+import fr.rennesmetropole.tools.Utils.{show,logger,log}
 import org.apache.hadoop.fs._
+import org.apache.logging.log4j.{Level, LogManager}
 import org.apache.spark.sql.functions.col
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 
 import java.time.Instant
 
 
-object ExecuteDechetRefAnalysis {
-  def main(args: Array[String]):  Either[Unit, (DataFrame,DataFrame)] = {
-    /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par defaut (UTC) */
-    println(" **** ExecuteDechetRefAnalysis ***** ")
-    var SYSDATE = java.time.LocalDate.now.toString
-
+object ExecuteDechetRefAnalysisBac {
+  def main(args: Array[String]):  Either[Unit,DataFrame] = {
+    println(" **** ExecuteDechetRefAnalysisBac ***** ")
+    log("LOG LEVEL " + logger.getLevel)
     
+    /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par defaut (UTC) */
+    var SYSDATE = java.time.LocalDate.now.toString
     try {
       SYSDATE = args(0)
       if(Utils.envVar("TEST_MODE") != "False" && args.length>1){
@@ -36,7 +36,6 @@ object ExecuteDechetRefAnalysis {
         throw new Exception("Pas d'arguments", e )
       }
     }
-    println("env : " + System.getenv().toString)
     /** Initialisation de la session spark */
     val spark: SparkSession = SparkSession.builder()
       .appName("Dechet Ref Analysis")
@@ -76,43 +75,11 @@ object ExecuteDechetRefAnalysis {
       println("env : " + System.getenv().toString)
 
       //import du dernier referentiel historise
-      val df_lastestProducteur = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvProd).repartition(400,col("code_producteur"))
-      println("PRODUCTEUR SHOW")
-      df_lastestProducteur.show()
       val df_lastestBac = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvRecip).repartition(400,col("code_puce"))
-      show(df_lastestProducteur,"FUNCTION LATEST")
-
-      //import du referentiel producteur a integrer
-      var df_ImportDechetProducteur = ImportDechet.ExecuteImportDechet(spark, SYSDATE, nameEnvProd).repartition(400,col("code_producteur"))
-      show(df_ImportDechetProducteur,"IMPORT DECHET Ref Producteur")
-      var df_AnalysedDechetProducteur :DataFrame = DechetAnalysis.createEmptyProducteurDf(spark)
-      if(!df_ImportDechetProducteur.isEmpty){
-        val tuples_prod =  ImportDechet.verif(spark, df_ImportDechetProducteur, nameEnvProd)
-        df_ImportDechetProducteur = tuples_prod._1
-        exception_verif = exception_verif + tuples_prod._2
-        println("df_ImportDechetProducteur après verif")
-        df_ImportDechetProducteur.show()
-        if(!df_ImportDechetProducteur.isEmpty){
-          val datePhoto: String = df_ImportDechetProducteur.first().getAs("date_photo")
-
-          df_AnalysedDechetProducteur = DechetAnalysis.ExecuteDechetAnalysis_Producteur(spark,
-            df_ImportDechetProducteur, SYSDATE, datePhoto, df_lastestProducteur)
-          val df_AnalysedDechetProducteur_tmp = df_AnalysedDechetProducteur.dropDuplicates("id_producteur")
-          //println("ligne producteur supprimé par le dropDuplicate")
-          //df_AnalysedDechetProducteur.union(df_AnalysedDechetProducteur_tmp).except(df_AnalysedDechetProducteur.intersect(df_AnalysedDechetProducteur_tmp)).show(10000)
-          df_AnalysedDechetProducteur = df_AnalysedDechetProducteur_tmp
-          show(df_AnalysedDechetProducteur,"ANALYSE PRODUCTEUR FINAL")
-
-        }
-        else {
-          prodVerifException = true
-        }
-        // Recuperation de la date photo
-
-
-      }else{
-        prodImportException = true
-      }
+      show(df_lastestBac,"FUNCTION LATEST")
+      //Import des producteurs analysé
+      val df_AnalysedDechetProducteur = Utils.readDataPath(spark, SYSDATE, nameEnvProd,"analysed_bucket","smart_orc")
+      show(df_AnalysedDechetProducteur,"Donnée producteur déja analysé")
 
       // Traitement des bacs
       var df_AnalysedDechetBac :DataFrame = DechetAnalysis.createEmptyBacDf(spark)
@@ -187,48 +154,10 @@ object ExecuteDechetRefAnalysis {
         if(!df_AnalysedDechetBac.head(1).isEmpty){
           Left(Utils.writeToS3(spark,df_AnalysedDechetBac,nameEnvRecip,SYSDATE))
         }
-        Right(df_AnalysedDechetProducteur,df_AnalysedDechetBac)
+        Right(df_AnalysedDechetBac)
       }
-      else { //partie tests
-        if (!df_AnalysedDechetBac.isEmpty && !df_AnalysedDechetProducteur.isEmpty) {
-          val path = "src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/"
-          df_AnalysedDechetBac = df_AnalysedDechetBac.coalesce(1)
-          df_AnalysedDechetProducteur = df_AnalysedDechetProducteur.coalesce(1)
-          val fs = FileSystem.get(spark.sparkContext.hadoopConfiguration)
-          df_AnalysedDechetBac.write.options(Map("header" -> "true", "delimiter" -> ";")).mode(SaveMode.Overwrite).csv(path + "latest_ref_bac/csv/")
-          df_AnalysedDechetProducteur.write.options(Map("header" -> "true", "delimiter" -> ";")).mode(SaveMode.Overwrite).csv(path + "latest_ref_prod/csv/")
-          var list_bac = new java.io.File(path + "latest_ref_bac/csv/").listFiles.filter(_.getName.endsWith(".csv"))
-          var list_prod = new java.io.File(path + "latest_ref_prod/csv/").listFiles.filter(_.getName.endsWith(".csv"))
-          val file_bac = list_bac.mkString("").split("\\\\")
-          val file_prod = list_prod.mkString("").split("\\\\")
-          fs.rename(new Path(path + "latest_ref_prod/csv/" + file_prod(file_prod.length - 1)), new Path(path + "latest_ref_prod/csv/ref_prod.csv"))
-          fs.rename(new Path(path + "latest_ref_bac/csv/" + file_bac(file_bac.length - 1)), new Path(path + "latest_ref_bac/csv/ref_bac.csv"))
-          fs.delete(new Path(path + "latest_ref_bac/csv/.ref_bac.csv.crc"), true)
-          fs.delete(new Path(path + "latest_ref_prod/csv/.ref_prod.csv.crc"), true)
-          fs.delete(new Path(path + "latest_ref_bac/csv/._SUCCESS.crc"), true)
-          fs.delete(new Path(path + "latest_ref_prod/csv/._SUCCESS.crc"), true)
-
-          df_AnalysedDechetBac.write.mode(SaveMode.Append).orc(path + "latest_ref_bac/orc/")
-          df_AnalysedDechetProducteur.write.mode(SaveMode.Append).orc(path + "latest_ref_prod/orc/")
-          println("DELETE OLD ORC")
-          fs.delete(new Path(path + "latest_ref_bac/orc/ref_bac.orc"), true)
-          fs.delete(new Path(path + "latest_ref_prod/orc/ref_prod.orc"), true)
-          var list_bac_orc = new java.io.File(path + "latest_ref_bac/orc/").listFiles.filter(_.getName.endsWith(".orc"))
-          var list_prod_orc = new java.io.File(path + "latest_ref_prod/orc/").listFiles.filter(_.getName.endsWith(".orc"))
-          val file_bac_orc = list_bac_orc.mkString("").split("\\\\")
-          val file_prod_orc = list_prod_orc.mkString("").split("\\\\")
-          fs.rename(new Path(path + "latest_ref_prod/orc/" + file_prod_orc(file_prod_orc.length - 1)), new Path(path + "latest_ref_prod/orc/ref_prod.orc"))
-          fs.rename(new Path(path + "latest_ref_bac/orc/" + file_bac_orc(file_bac_orc.length - 1)), new Path(path + "latest_ref_bac/orc/ref_bac.orc"))
-          fs.delete(new Path(path + "latest_ref_bac/orc/.ref_bac.orc.crc"), true)
-          fs.delete(new Path(path + "latest_ref_prod/orc/.ref_prod.orc.crc"), true)
-          fs.delete(new Path(path + "latest_ref_bac/orc/._SUCCESS.crc"), true)
-          fs.delete(new Path(path + "latest_ref_prod/orc/._SUCCESS.crc"), true)
-          Right(df_AnalysedDechetBac,df_AnalysedDechetProducteur)
-        }else {
-          logger.error(exception)
-          Right(df_AnalysedDechetBac,df_AnalysedDechetProducteur)
-        }
-
+      else {
+        Right(df_AnalysedDechetBac)
       }
     } catch {
       case e: Throwable => {

@@ -99,7 +99,7 @@ dfExpectedBac.show()
         df_prod = df_prod.drop("date_crea","date_modif")
         if(DEBUG == "true"){
           
-          println(" =======  SCHEMA df_bac  =======  oye")
+          println(" =======  SCHEMA df_bac  =======  ")
           df_bac.printSchema()
           println(" =======  SCHEMA df_prod  =======  ") 
           df_prod.printSchema()
