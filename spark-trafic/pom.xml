@@ -69,6 +69,13 @@
             <version>${hadoop.version}</version>
         </dependency>
 
+                <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-hadoop-cloud -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hadoop-cloud_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>com.typesafe.scala-logging</groupId>
             <artifactId>scala-logging_${scala.binary.version}</artifactId>

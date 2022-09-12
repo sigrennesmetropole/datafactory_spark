@@ -38,7 +38,7 @@ spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefPreparation  --files
 
 Commande pour l'enrichissement des données déchets Référentiel :
 ```
-  spark-submit --master spark://spark:7077  --executor-cores 3 --executor-memory 1G --driver-memory 1G --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis --files /app-dechet/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-dechet/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-dechet/conf/application.conf"  /app-dechet/dechet-analysis/target/rm-dechet-analysis-4.0-SNAPSHOT.jar 2022-07-05
+  spark-submit --master spark://spark:7077  --executor-cores 8 --executor-memory 12G --driver-memory 8G --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis --files /app-dechet/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-dechet/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-dechet/conf/application.conf"  /app-dechet/dechet-analysis/target/rm-dechet-analysis-4.0-SNAPSHOT.jar 2022-04-15
 ```
 
 ### Commande Exutoire

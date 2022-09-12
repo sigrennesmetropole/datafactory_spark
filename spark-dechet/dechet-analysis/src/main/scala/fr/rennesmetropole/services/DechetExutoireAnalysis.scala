@@ -5,7 +5,7 @@ import fr.rennesmetropole.services.ImportDechet.createEmptyExutoireDataFrame
 import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.{show,logger}
 import org.apache.spark.sql._
-
+import fr.rennesmetropole.tools.Utils.log
 import java.sql.Timestamp
 import java.time.Instant
 //import org.apache.spark.sql.functions.{col, lit}
@@ -17,9 +17,9 @@ object DechetExutoireAnalysis {
   var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
   def setNow(now_test:Instant):Unit ={
     if(Utils.envVar("TEST_MODE") != "False"){
-      println("NOW TEST")
+      log("NOW TEST")
       this.now = Timestamp.from(now_test)
-      println(now)
+      log(now)
     }else {
       now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
     }
@@ -60,7 +60,7 @@ object DechetExutoireAnalysis {
         show(df,"df")
         var df_filter = df_renamed
         if(reprise != "reprise"){
-          println("filtrage des données en cours")
+          log("filtrage des données en cours")
           //Regle d'alimentation: Filtre Insertion nouvelle mesure du mois
           df_filter = df_renamed.filter(date_format(col("date_mesure"),"yyyy-MM") === df_renamed.select(functions.max( date_format(col("date_mesure"),"yyyy-MM"))).first().get(0))
         }

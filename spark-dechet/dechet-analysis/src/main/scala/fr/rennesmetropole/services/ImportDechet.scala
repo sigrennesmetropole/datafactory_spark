@@ -2,6 +2,7 @@ package fr.rennesmetropole.services
 
 import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.{show, tableVar, logger}
+import fr.rennesmetropole.tools.Utils.log
 import org.apache.spark.sql.expressions.Window
 import org.apache.spark.sql.functions.{col, row_number}
 import org.apache.spark.sql.types._
@@ -74,7 +75,7 @@ object ImportDechet {
     val URL = tableVar(nameEnv, "analysed_bucket")
     if(Utils.envVar("TEST_MODE") == "False") {
     try {
-      println("Lecture data latest...")
+      log("Lecture data latest...")
       val pathDf = spark
         .read
         .orc(URL+"latest")
@@ -87,7 +88,7 @@ object ImportDechet {
       readDf
     } catch {
       case e : Throwable =>
-        println("ERROR while reading data at : " + URL+"latest \nError stacktrace :"+ e)
+        log("ERROR while reading data at : " + URL+"latest \nError stacktrace :"+ e)
         if("tableProducteur".equals(nameEnv))
           createEmptyProducteurDataFrame(spark, DATE, true)
         else if("tableRecipient".equals(nameEnv))
@@ -115,12 +116,12 @@ object ImportDechet {
         null
     }else {
       try {
-        println("LECTURE LATEST REF")
+        log("LECTURE LATEST REF")
          if("tableProducteur".equals(nameEnv)) {
           spark.read.format("orc").load("src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/ref_prod.orc")
         }
         else if("tableRecipient".equals(nameEnv)) {
-          println("LECTURE LATEST REF BAC")
+          log("LECTURE LATEST REF BAC")
             spark.read.format("orc").load("src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/orc/ref_bac.orc")
         }else
         null
@@ -128,7 +129,7 @@ object ImportDechet {
 
       } catch {
         case e : Throwable =>
-        println("ERROR while reading data at : " + URL+"latest \nError stacktrace :"+ e)
+        log("ERROR while reading data at : " + URL+"latest \nError stacktrace :"+ e)
         if("tableProducteur".equals(nameEnv))
           createEmptyProducteurDataFrame(spark, DATE, true)
         else if("tableRecipient".equals(nameEnv))
@@ -155,8 +156,8 @@ object ImportDechet {
       pathDf
     } catch {
       case e : Throwable =>
-        println("ERROR while reading data at : " + URL+postURL+" \nError stacktrace :"+ e)
-        println("Initialisation de la table...")
+        log("ERROR while reading data at : " + URL+postURL+" \nError stacktrace :"+ e)
+        log("Initialisation de la table...")
         if("tableProducteur".equals(nameEnv))
           createEmptyProducteurDataFrame(spark, DATE, true)
         else if("tableRecipient".equals(nameEnv))
@@ -337,7 +338,7 @@ object ImportDechet {
               exception = exception + row.toSeq.toString().replace("WrappedArray","") + "\n"
             )
           }else {
-            println("pas de doublons prod")
+            log("pas de doublons prod")
           }
 
         }
@@ -368,7 +369,7 @@ object ImportDechet {
 
           }
           else {
-            println("pas de doublons bac")
+            log("pas de doublons bac")
           }
         }
       }
@@ -398,7 +399,7 @@ object ImportDechet {
     }
     val year_ref = year.toInt-1
     val dateRef = year_ref+"-"+month
-    println("DATE Donne support :" + dateRef)
+    log("DATE Donne support :" + dateRef)
     // return un dataframe contenant les donnees qui vont permettre de corrigé les donnees qui vienne d'etre integrer
     var namePath ="analysed_bucket"
     if (Utils.envVar("TEST_MODE") == "True"){

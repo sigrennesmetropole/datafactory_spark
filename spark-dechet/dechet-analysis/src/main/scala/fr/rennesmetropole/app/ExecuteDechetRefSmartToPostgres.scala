@@ -4,7 +4,7 @@ import fr.rennesmetropole.services.{DechetAnalysis, ImportDechet}
 import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
-
+import fr.rennesmetropole.tools.Utils.log
 import java.util.Properties
 
 object ExecuteDechetRefSmartToPostgres {
@@ -15,10 +15,10 @@ object ExecuteDechetRefSmartToPostgres {
       SYSDATE = args(0)
     } catch {
       case e: Throwable => {
-        println("Des arguments manquent")
-        println("Commande lancée :")
-        println("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
-        println("DATE : 2021-05-07 => yyyy/mm/dd")
+        log("Des arguments manquent")
+        log("Commande lancée :")
+        log("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
+        log("DATE : 2021-05-07 => yyyy/mm/dd")
         throw new Exception("Pas d'arguments", e )
       }
     }

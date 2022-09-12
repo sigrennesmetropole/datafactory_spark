@@ -6,7 +6,7 @@ import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.time.Instant
-
+import fr.rennesmetropole.tools.Utils.log
 object ExecuteDechetAnalysis {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
@@ -20,10 +20,10 @@ object ExecuteDechetAnalysis {
       }
     } catch {
       case e: Throwable => {
-        println("Des arguments manquent")
-        println("Commande lancée :")
-        println("spark-submit --class fr.rennesmetropole.app.ExecuteDechetAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
-        println("DATE : 2021-05-07 => yyyy/mm/dd")
+        log("Des arguments manquent")
+        log("Commande lancée :")
+        log("spark-submit --class fr.rennesmetropole.app.ExecuteDechetAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
+        log("DATE : 2021-05-07 => yyyy/mm/dd")
         throw new Exception("Pas d'arguments", e )
       }
     }
@@ -56,19 +56,19 @@ object ExecuteDechetAnalysis {
     try {
       val df_ImportDechet = ImportDechet.ExecuteImportDechet(spark, SYSDATE, nameEnv)
       val df_lastestBac = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvRecip)
-      println("IMPORT DECHET")
+      log("IMPORT DECHET")
       df_ImportDechet.show(false)
       var df_PartitionedDechet = df_ImportDechet
       if(!df_ImportDechet.head(1).isEmpty){
         val df_AnalysedDechet = DechetAnalysis.ExecuteDechetAnalysis_Collecte(spark, df_ImportDechet,SYSDATE, df_lastestBac).dropDuplicates()
-        println("ANALYSED DECHET")
+        log("ANALYSED DECHET")
         df_AnalysedDechet.show(false)
 
         df_PartitionedDechet = Utils.dfToPartitionedDf(df_AnalysedDechet, SYSDATE)
-        println("PARTITIONED DECHET")
+        log("PARTITIONED DECHET")
         df_PartitionedDechet.show(false)
       }else{
-        println("Aucune donnee importe, skip du traitement...")
+        log("Aucune donnee importe, skip du traitement...")
       }
 
       if (Utils.envVar("TEST_MODE") == "False" && (!df_PartitionedDechet.head(1).isEmpty)) {

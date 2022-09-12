@@ -3,7 +3,7 @@ package fr.rennesmetropole.services
 import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
+import fr.rennesmetropole.tools.Utils.log
 
 object ImportDechetExutoire {
 

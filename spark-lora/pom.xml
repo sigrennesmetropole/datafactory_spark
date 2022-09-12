@@ -18,11 +18,11 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <encoding>UTF-8</encoding>
+        <scala.binary.version>2.12</scala.binary.version>
         <spark.version>3.3.0</spark.version>
         <hadoop.version>3.3.2</hadoop.version>
         <scala.version>2.12.15</scala.version>
         <scala.binary.version>2.12</scala.binary.version>
-        <scala.compat.version>2.12</scala.compat.version>
     </properties>
     <repositories>
         <repository>
@@ -99,12 +99,12 @@
         <dependency>
             <groupId>org.scalactic</groupId>
             <artifactId>scalactic_${scala.binary.version}</artifactId>
-            <version>3.0.8</version>
+            <version>3.0.5</version>
         </dependency>
         <dependency>
             <groupId>org.scalatest</groupId>
             <artifactId>scalatest_${scala.binary.version}</artifactId>
-            <version>3.0.8</version>
+            <version>3.0.5</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -117,6 +117,12 @@
             <groupId>com.typesafe.scala-logging</groupId>
             <artifactId>scala-logging_${scala.binary.version}</artifactId>
             <version>3.9.4</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-hadoop-cloud -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hadoop-cloud_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
         </dependency>
 
     </dependencies>

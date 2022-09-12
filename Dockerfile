@@ -1,4 +1,6 @@
 FROM maven:3.8.6-openjdk-11-slim AS build-trafic
+RUN apt-get update
+RUN apt-get install nano
 RUN mkdir -p /workspace-trafic
 WORKDIR /workspace-trafic
 COPY spark-trafic/pom.xml /workspace-trafic

@@ -22,7 +22,7 @@ object Utils {
   val USER_LOG = Level.forName("DATA FACTORY", 200);
   var config = ConfigFactory.load()
 
-def log(msg:String):Unit ={
+def log(msg:Any):Unit ={
   logger.log(USER_LOG, msg)
 }
   /**
@@ -75,7 +75,7 @@ def log(msg:String):Unit ={
         val URL = tableVar(nameEnv, "out_bucket")
         /* calcul du chemin pour lire les données sur minio */
         val postURL = date2URL(DATE)
-        println("URL de lecture sur Minio : " + URL + postURL)
+        log("URL de lecture sur Minio : " + URL + postURL)
 
         try {
           spark
@@ -84,7 +84,7 @@ def log(msg:String):Unit ={
 
         } catch {
           case e: Throwable =>
-            println("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
+            log("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
             if ("tableProducteur".equals(nameEnv))
               createEmptyProducteurDataFrame(spark, DATE)
             else if ("tableRecipient".equals(nameEnv))
@@ -108,7 +108,7 @@ def log(msg:String):Unit ={
       } else {
         val URL = tableVar(nameEnv, "test_bucket")
         val postURL = date2URL(DATE)
-        println("URL LECTURE TEST : " + URL + postURL)
+        log("URL LECTURE TEST : " + URL + postURL)
         if (DATE == "WrongDate") {
           if ("tableProducteur".equals(nameEnv))
             createEmptyProducteurDataFrame(spark, DATE)
@@ -151,7 +151,7 @@ def log(msg:String):Unit ={
       val URL = tableVar(nameEnv, namePath)
       /* calcul du chemin pour lire les données sur minio */
       val postURL = date2URL(DATE)
-      println("URL de lecture sur Minio : " + URL + postURL)
+      log("URL de lecture sur Minio : " + URL + postURL)
       try {
         typeFile match {
           case "csv" =>
@@ -174,7 +174,7 @@ def log(msg:String):Unit ={
         }
       } catch {
         case e: Throwable =>
-          println("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
+          log("ERROR while reading data at : " + URL + postURL + " \nError stacktrace :" + e)
           if ("tableProducteur".equals(nameEnv))
             createEmptyProducteurDataFrame(spark, DATE)
           else if ("tableRecipient".equals(nameEnv))
@@ -199,7 +199,7 @@ def log(msg:String):Unit ={
       val URL = tableVar(nameEnv, namePath)
 
       val postURL = date2URL(DATE)
-      println("URL LECTURE TEST : " + URL + postURL)
+      log("URL LECTURE TEST : " + URL + postURL)
       if (DATE == "WrongDate") {
         if ("tableProducteur".equals(nameEnv))
           createEmptyProducteurDataFrame(spark, DATE)
@@ -240,14 +240,14 @@ def log(msg:String):Unit ={
     val URL = tableVar(nameEnv,"analysed_bucket")
     /* calcul du chemin pour lire les données sur minio */
     val postURL = date2URL(DATE)
-    println("URL de lecture sur Minio : " + URL + postURL+"orc/")
+    log("URL de lecture sur Minio : " + URL + postURL+"orc/")
     try {
       spark
         .read
         .orc(URL + postURL+"orc/")
     } catch {
       case e : Throwable =>
-        println("ERROR while reading data at : " + URL+postURL +"orc/"+ " \nError stacktrace :"+ e)
+        log("ERROR while reading data at : " + URL+postURL +"orc/"+ " \nError stacktrace :"+ e)
         spark.emptyDataFrame
       }
     }
@@ -283,7 +283,7 @@ def log(msg:String):Unit ={
    */
   def postgresPersist(spark: SparkSession, pgUrl: String, dfToWrite: DataFrame, pgTable: String,DATE : String): Unit = {
 
-    println("Proceed to write data in table " + pgTable)
+    log("Proceed to write data in table " + pgTable)
 
     val connectionProps = new Properties()
     connectionProps.setProperty("driver", "org.postgresql.Driver")
@@ -291,7 +291,7 @@ def log(msg:String):Unit ={
     connectionProps.setProperty("password", Utils.envVar("POSTGRES_SECRET_KEY"))
 
     val nb = delete_partition(pgTable,pgUrl,DATE)
-    println("fonction suppression fini ")
+    log("fonction suppression fini ")
 
     //Passing in the URL, table in which data will be written and relevant connection properties
     dfToWrite.write.mode(SaveMode.Append).jdbc(pgUrl, pgTable, connectionProps)
@@ -299,7 +299,7 @@ def log(msg:String):Unit ={
 
    def postgresPersistOverwrite(spark: SparkSession, pgUrl: String, dfToWrite: DataFrame, pgTable: String): Unit = {
 
-    println("Proceed to replace all data in table " + pgTable)
+    log("Processus de remplacement en cours sur toute les donnes de " + pgTable)
 
     val connectionProps = new Properties()
     connectionProps.setProperty("driver", "org.postgresql.Driver")
@@ -307,10 +307,11 @@ def log(msg:String):Unit ={
     connectionProps.setProperty("password", Utils.envVar("POSTGRES_SECRET_KEY"))
 
     val nb = delete_table(pgTable,pgUrl)
-    println("fonction suppression fini ")
+    log("fonction suppression fini ")
 
     //Passing in the URL, table in which data will be written and relevant connection properties
     dfToWrite.write.mode(SaveMode.Append).jdbc(pgUrl, pgTable, connectionProps)
+    log("Donnee ecrite dans la base de donnees postgres")
   }
 
       /** 
@@ -336,11 +337,11 @@ def log(msg:String):Unit ={
       }
       finally{
           statement.close();
-          println(number_of_rows_deleted + " rows deleted.")
+          log(number_of_rows_deleted + " rows deleted.")
       }
     }
     catch {
-      case e:SQLException => println("error lors le la suppression des valeurs partitionnées"); e.printStackTrace();
+      case e:SQLException => log("error lors le la suppression des valeurs partitionnées"); e.printStackTrace();
     }
     finally{
       connObj.close();
@@ -369,11 +370,11 @@ def log(msg:String):Unit ={
       }
       finally{
           statement.close();
-          println(number_of_rows_deleted + " rows deleted.")
+          log(number_of_rows_deleted + " rows deleted.")
       }
     }
     catch {
-      case e:SQLException => println("error lors le la suppression de la table " + table_name + " : "); e.printStackTrace();
+      case e:SQLException => log("error lors le la suppression de la table " + table_name + " : "); e.printStackTrace();
     }
     finally{
       connObj.close();
@@ -400,7 +401,7 @@ def log(msg:String):Unit ={
 
   def writeToS3(spark: SparkSession, df_toWrite: DataFrame, nameEnv :String, DATE :String): Unit = {
     val postURL = date2URL(DATE)
-    println("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
+    log("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
     df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write.options(Map("header"->"true", "delimiter"->";","compression"->"gzip"))
@@ -429,12 +430,12 @@ def log(msg:String):Unit ={
         .save(Utils.tableVar(nameEnv,"analysed_bucket") + "latest")
     }
 
-    println("Write to s3 Done")
+    log("Write to s3 Done")
   }
 
   def writeToS3ForPatchOrc(spark: SparkSession, df_toWrite: DataFrame, nameEnv :String, DATE :String): Unit = {
     val postURL = date2URL(DATE)
-    println("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
+    log("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
     df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write.options(Map("header"->"true", "delimiter"->";","compression"->"gzip"))
@@ -442,14 +443,14 @@ def log(msg:String):Unit ={
       .csv(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"patch/")
 
     if("tableRecipient".equals(nameEnv) ) {
-      println("Application, du patch en cours...")
+      log("Application, du patch en cours...")
       df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
         .write
         .mode(SaveMode.Append)
         .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/patch/")
     }
 
-    println("Write to s3 Done")
+    log("Write to s3 Done")
   }
 
 
@@ -763,18 +764,18 @@ def log(msg:String):Unit ={
     debug match {
       case "1" =>
         if (desc != null) {
-          println(desc)
+          log(desc)
         }
 
       case "2" =>
         if (desc != null) {
-          println (desc)
+          log (desc)
         }
         df.show (50,false)
 
       case "3" =>
         if (desc != null) {
-          println (desc)
+          log (desc)
         }
         df.show (100000000,false)
       case _ => 
