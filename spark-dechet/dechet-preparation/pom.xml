@@ -18,11 +18,11 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <encoding>UTF-8</encoding>
-        <scala.binary.version>2.11</scala.binary.version>
-        <spark.version>2.4.3</spark.version>
-        <hadoop.version>3.3.1</hadoop.version>
-        <scala.version>2.11.8</scala.version>
-        <scala.compat.version>2.11</scala.compat.version>
+        <scala.binary.version>2.12</scala.binary.version>
+        <spark.version>3.3.0</spark.version>
+        <hadoop.version>3.3.2</hadoop.version>
+        <scala.version>2.12.15</scala.version>
+        <scala.binary.version>2.12</scala.binary.version>
     </properties>
     <repositories>
         <repository>
@@ -104,7 +104,7 @@
         <!-- https://mvnrepository.com/artifact/com.crealytics/spark-excel -->
         <dependency>
             <groupId>com.crealytics</groupId>
-            <artifactId>spark-excel_2.11</artifactId>
+            <artifactId>spark-excel_2.12</artifactId>
             <version>0.13.7</version>
         </dependency>
 
