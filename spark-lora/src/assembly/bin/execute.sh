@@ -47,7 +47,7 @@ LORAANALYSISPROPERTIES="$SCRIPTPATH/../conf/specific/rm-lora-analysis.properties
 source "${SCRIPTPATH}/../conf/specific/rm-lora-analysis.properties"
 
 printf "${gre}TEST SPARK-LORA via job cronicle en intégration sur NOW:$NOW{end}\n"
-docker exec ${CONTAINER_SPARK} spark-submit --class ${sparkClass} ${sparkJar} $NOW                                                                                                                                                                                             
+docker exec ${CONTAINER_SPARK} spark-submit --class ${sparkClass} --files /app-lora/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" ${sparkJar} $NOW
 result=$?
 
 if [ $result -ne 0 ];
