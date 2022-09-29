@@ -1,4 +1,9 @@
+**/.idea
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/csv/*
+**/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/orc/*
+**/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/csv/*
+**/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/*
+**/target/***/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/csv/*
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/orc/*
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/csv/*
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/*
