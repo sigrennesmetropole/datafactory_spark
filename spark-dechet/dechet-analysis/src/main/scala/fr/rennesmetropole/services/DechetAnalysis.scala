@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.Properties
-
+import fr.rennesmetropole.tools.Utils.log
 object DechetAnalysis {
   val frTZ = java.time.ZoneId.of("Europe/Paris")
   var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
@@ -18,9 +18,9 @@ object DechetAnalysis {
   
   def setNow(now_test:Instant):Unit ={
     if(Utils.envVar("TEST_MODE") != "False"){
-      println("NOW TEST")
+      log("NOW TEST")
       this.now = Timestamp.from(now_test)
-      println(now)
+      log(now)
     }else {
        now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
     }
@@ -51,7 +51,7 @@ object DechetAnalysis {
             StructField("day", StringType, false)
           )
         )
-    println("Dechet Analsyis")
+    log("Dechet Analsyis")
     if(!df_raw.head(1).isEmpty){
       try{
         val df_lastestBacFiltered = df_lastestBac.select("id_bac", "code_puce","date_debut","date_fin","categorie_recipient")
@@ -90,7 +90,7 @@ object DechetAnalysis {
         df_poids_corr.select("date_mesure","code_puce", "id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif","type_flux")
       }catch{
         case e:Throwable =>
-        println("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" + e)
+        log("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" + e)
         spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
       }
     }else {
@@ -111,7 +111,7 @@ object DechetAnalysis {
       val moyenne_categorie_for_a_codeImmat = df_withTypeFlux.select("type_flux","code_immat").where(col("code_immat")===lit(row.getString(0))).groupBy("type_flux","code_immat").count().orderBy(desc("count")).take(1).head(0).toString()
       df_withTypeFlux = df_withTypeFlux.withColumn("categorie_recipient_moyen",when(df_withTypeFlux("code_immat")===lit(row.getString(0)),moyenne_categorie_for_a_codeImmat))
     })
-    println("test PR UDF :" + df_categorieRecipientNull_and_CodeImmatNotNull.show())
+    log("test PR UDF :" + df_categorieRecipientNull_and_CodeImmatNotNull.show())
     //Update de la colonne de flux
     val df_withAllTypeFlux = df_withTypeFlux.withColumn("type_flux_temp",Utils.type_flux_UDF("post_flux")(df_withTypeFlux("type_flux"),df_withTypeFlux("code_immat"),df_withTypeFlux("categorie_recipient_moyen"))).drop("type_flux").withColumnRenamed("type_flux_temp","type_flux")
     show(df_withAllTypeFlux,"df_withAllTypeFlux")
@@ -158,7 +158,7 @@ object DechetAnalysis {
         mapMoyenneBacRattache.put(flux_lit._1,moyenne_value)
       }
     }
-    println("mapMoyenneBacRattache : " + mapMoyenneBacRattache.mkString(" - "))
+    log("mapMoyenneBacRattache : " + mapMoyenneBacRattache.mkString(" - "))
     //calcul des moyennes pour les pesé avec bac non rattaché et pour chaque type de récipient
     for (flux_global <- liste_flux) {
       val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
@@ -173,7 +173,7 @@ object DechetAnalysis {
         mapMoyenneSansBacRattache.put(flux_global._1,moyenne_value)
       }
     }
-    println("mapMoyenneSansBacRattache : " + mapMoyenneSansBacRattache.mkString(" - "))
+    log("mapMoyenneSansBacRattache : " + mapMoyenneSansBacRattache.mkString(" - "))
     //Calcul moyenne des flux Inconnu et Autres
     val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
       df_support("poids")>0 && df_support("poids")<250)
@@ -247,7 +247,7 @@ object DechetAnalysis {
       df.select("id_producteur","code_producteur","id_rva","commune","code_insee","type_producteur","activite","latitude","longitude","date_debut","date_fin","date_crea","date_modif")
     }catch{
       case e:Throwable =>
-        println("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" +e)
+        log("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" +e)
         createEmptyProducteurDf(spark)
     }
   }
@@ -344,7 +344,7 @@ object DechetAnalysis {
       .withColumn("id_producteur",Utils.idProducteurUDF()(col("code_producteur"),lit(datePhoto)))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Producteurs reactives")
+    log("Producteurs reactives")
     df_reactivated.show(false)*/
 
     val dfJoined = df_updated.unionByName(df_latestProducteur.filter(col("date_fin").isNotNull))//.unionByName(df_toEnd)
@@ -395,6 +395,7 @@ object DechetAnalysis {
       //latestActive.filter(col("code_producteur").isInCollection(
       //df_duplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
+
     show(df_notChanged,"Producteur inchanges")
 
     val df_notduplicated = latestActive.unionByName(df_partitionedIncomingProducteur)
@@ -405,6 +406,7 @@ object DechetAnalysis {
       //latestActive.filter(col("code_producteur").isInCollection(
       //df_notduplicated.select("code_producteur").filter(col("code_producteur").isNotNull).rdd.map(row => row(0)).collect().toList))
 
+ 
     show(df_changed,"Producteur changes")
     
 
@@ -477,12 +479,14 @@ object DechetAnalysis {
       //latestActive.filter(col("code_puce").isInCollection(
       //df_duplicated.select("code_puce").filter(col("code_puce").isNotNull).rdd.map(row => row(0)).collect().toList))
 
+
     show(df_notChanged,"Bacs inchanges")
 
     val df_notduplicated =  latestActive.drop("id_producteur").unionByName(df_partitionedIncomingRecipient.drop("id_producteur"))
       .groupBy("code_puce","code_producteur","categorie_recipient","type_recipient","litrage_recipient","type_puce","nb_collecte")
       .count().filter("count = 1")
     show(df_notduplicated,"df_notduplicated")
+
     val df_changed = latestActive.join(df_notduplicated.filter(col("code_puce").isNotNull),Seq("code_puce"),"left_semi")
       //latestActive.filter(col("code_puce").isInCollection(
       //df_notduplicated.select("code_puce").filter(col("code_puce").isNotNull && col("code_puce") =!= "INCONNU" && col("code_puce") =!= "null").rdd.map(row => row(0)).collect().toList))
@@ -539,9 +543,9 @@ object DechetAnalysis {
    */
   def deletedRecipientTreatment(df_preparedIncomingRecipient : DataFrame, datePhoto: String,
                                 df_latest : DataFrame) : DataFrame = {
-    /*println("count df_preparedIncomingRecipient :" + df_preparedIncomingRecipient.count())
+    /*log("count df_preparedIncomingRecipient :" + df_preparedIncomingRecipient.count())
     show(df_preparedIncomingRecipient,"Bac df_preparedIncomingRecipient")
-    println("count df_latest :" + df_latest.count())
+    log("count df_latest :" + df_latest.count())
     show(df_latest,"Bac df_latest")*/
     val dfDeleted = df_latest.join(df_preparedIncomingRecipient.repartition(1000,col("code_puce")),
                   df_latest("code_puce") === df_preparedIncomingRecipient("code_puce"), "left_anti")
@@ -555,7 +559,7 @@ object DechetAnalysis {
                     lit(now).cast(TimestampType))
     show(dfDeleted3,"Bac supprimes")
 
-    dfDeleted
+    dfDeleted3
   }
 
   /**
@@ -584,7 +588,7 @@ object DechetAnalysis {
 
     }catch{
       case e:Throwable =>
-        println("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" +e)
+        log("ERROR durant l'enrichissement ExecuteDechetAnalysis()\n" +e)
         createEmptyBacDf(spark)
     }
   }
@@ -758,7 +762,7 @@ object DechetAnalysis {
       .withColumn("id_bac",Utils.idBacUdf()(col("code_puce"),lit(datePhoto)))
       .withColumn("date_modif", lit(now).cast(TimestampType))
 
-    println("Bacs reactives")
+    log("Bacs reactives")
     df_reactivated.show(false)*/
 
     val dfJoined = df_updated_changed // .unionByName(df_reactivated)

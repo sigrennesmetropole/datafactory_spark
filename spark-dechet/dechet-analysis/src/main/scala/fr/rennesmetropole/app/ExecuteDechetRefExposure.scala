@@ -4,7 +4,7 @@ import fr.rennesmetropole.services.ImportDechet
 import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
-
+import fr.rennesmetropole.tools.Utils.log
 object ExecuteDechetRefExposure {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
@@ -17,10 +17,10 @@ object ExecuteDechetRefExposure {
       }
     } catch {
       case e: Throwable => {
-        println("Des arguments manquent")
-        println("Commande lancée :")
-        println("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefExposure /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
-        println("DATE : 2021-05-07 => yyyy/mm/dd")
+        log("Des arguments manquent")
+        log("Commande lancée :")
+        log("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefExposure /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
+        log("DATE : 2021-05-07 => yyyy/mm/dd")
         throw new Exception("Pas d'arguments", e )
       }
     }
@@ -68,7 +68,7 @@ object ExecuteDechetRefExposure {
               Utils.envVar("POSTGRES_TABLE_DECHET_PRODUCTEUR_RUDI")))
              }
              else {
-              println("pas d'exposition dans l'API")
+              log("pas d'exposition dans l'API")
              }
           
         } else {

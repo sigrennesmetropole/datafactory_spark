@@ -141,10 +141,10 @@ dfExpectedBac.show()
   @Test
   def ExecuteDechetRefAnalysisTestMultiple(): Unit = {
     println("\n#\n#\n ############################### ExecuteDechetRefAnalysisTest ############################### \n#\n#")
-    var directory = new File("src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/");
+    /*var directory = new File("src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/");
     FileUtils.cleanDirectory(directory);
     directory = new File("src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_bac/orc/");
-    FileUtils.cleanDirectory(directory);
+    FileUtils.cleanDirectory(directory);*/
     val schemaOutputProd = StructType(
         List(
           StructField("id_producteur", LongType, false),
@@ -205,12 +205,12 @@ dfExpectedBac.show()
 
     println("EXPECTED PROD")
     dfExpectedBac.show()
-    var args = Array("2022-02-25","2022-02-25T12:00:00.00Z")
+   /* var args = Array("2022-02-25","2022-02-25T12:00:00.00Z")
     println("call1 ")
     ExecuteDechetRefAnalysis.main(args)
     var args2 = Array("2022-02-26","2022-02-26T12:00:00.00Z")
     println("call2 ")
-    ExecuteDechetRefAnalysis.main(args2)
+    ExecuteDechetRefAnalysis.main(args2)*/
     var args3 = Array("2022-02-27","2022-02-27T12:00:00.00Z")
     println("call3 ")
     ExecuteDechetRefAnalysis.main(args3) match {

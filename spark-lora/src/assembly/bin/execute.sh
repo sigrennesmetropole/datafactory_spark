@@ -14,7 +14,7 @@ __EOF__
 
 WINDOW=15
 
-while getopts "he:a:w:d:" OPTION ; do
+while getopts "hd:r:" OPTION ; do
         case $OPTION in
                 h)
                         usage
@@ -22,6 +22,9 @@ while getopts "he:a:w:d:" OPTION ; do
                         ;;
                 d)
                         NOW=$OPTARG
+                        ;;
+                r)
+                        REPRISE=$OPTARG
                         ;;
                 *)
                         echo "Unknown option $OPTION"
@@ -45,9 +48,16 @@ SCRIPTPATH=$(dirname "$SCRIPT")
 #cd $SCRIPTPATH
 LORAANALYSISPROPERTIES="$SCRIPTPATH/../conf/specific/rm-lora-analysis.properties"
 source "${SCRIPTPATH}/../conf/specific/rm-lora-analysis.properties"
-
-printf "${gre}TEST SPARK-LORA via job cronicle en intégration sur NOW:$NOW{end}\n"
-docker exec ${CONTAINER_SPARK} spark-submit --class ${sparkClass} --files /app-lora/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" ${sparkJar} $NOW
+if [ $REPRISE == "reprise" ]
+then
+        printf "${gre}SPARK-LORA REPRISE via cronicle NOW:$NOW{end}\n"
+        printf "docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class ${sparkClassReprise} --files ${sparkLoraConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} ${sparkJar} $NOW"
+        docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class ${sparkClassReprise} --files ${sparkLoraConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} ${sparkJar} $NOW  
+else
+printf "${gre}SPARK-LORA via cronicle NOW:$NOW{end}\n"
+printf "docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class ${sparkClass} --files ${sparkLoraConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} ${sparkJar} $NOW"
+docker exec ${CONTAINER_SPARK} spark-submit --num-executors=${TOTAL_EXEC_CORES} --executor-memory ${EXEC_MEMORY} --total-executor-cores ${TOTAL_EXEC_CORES} --driver-memory ${DRIVER_MEMORY} --class ${sparkClass} --files ${sparkLoraConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkLoraConfigurationPath} ${sparkJar} $NOW     
+fi                                                                                                                                                                                          
 result=$?
 
 if [ $result -ne 0 ];

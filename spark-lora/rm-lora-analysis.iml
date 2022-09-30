@@ -54,8 +54,6 @@
     <orderEntry type="library" name="Maven: org.slf4j:jul-to-slf4j:1.7.32" level="project" />
     <orderEntry type="library" name="Maven: org.slf4j:jcl-over-slf4j:1.7.32" level="project" />
     <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-slf4j-impl:2.17.2" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-api:2.17.2" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-core:2.17.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-1.2-api:2.17.2" level="project" />
     <orderEntry type="library" name="Maven: com.ning:compress-lzf:1.1" level="project" />
     <orderEntry type="library" name="Maven: org.xerial.snappy:snappy-java:1.1.8.4" level="project" />
@@ -146,6 +144,15 @@
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-common:3.3.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop.thirdparty:hadoop-shaded-protobuf_3_7:1.1.1" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-annotations:3.3.2" level="project" />
+    <orderEntry type="module-library">
+      <library name="Maven: jdk.tools:jdk.tools:1.8">
+        <CLASSES>
+          <root url="jar://$USER_HOME$/.jdks/corretto-1.8.0_332/jre/../lib/tools.jar!/" />
+        </CLASSES>
+        <JAVADOC />
+        <SOURCES />
+      </library>
+    </orderEntry>
     <orderEntry type="library" name="Maven: org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1" level="project" />
     <orderEntry type="library" name="Maven: com.google.guava:guava:27.0-jre" level="project" />
     <orderEntry type="library" name="Maven: com.google.guava:failureaccess:1.0" level="project" />
@@ -240,10 +247,11 @@
     <orderEntry type="library" name="Maven: org.eclipse.jetty:jetty-security:11.0.6" level="project" />
     <orderEntry type="library" name="Maven: org.postgresql:postgresql:42.2.19" level="project" />
     <orderEntry type="library" name="Maven: org.checkerframework:checker-qual:3.5.0" level="project" />
-    <orderEntry type="library" name="Maven: org.scalactic:scalactic_2.12:3.0.8" level="project" />
-    <orderEntry type="library" scope="TEST" name="Maven: org.scalatest:scalatest_2.12:3.0.8" level="project" />
+    <orderEntry type="library" name="Maven: org.scalactic:scalactic_2.12:3.0.5" level="project" />
+    <orderEntry type="library" scope="TEST" name="Maven: org.scalatest:scalatest_2.12:3.0.5" level="project" />
     <orderEntry type="library" scope="TEST" name="Maven: junit:junit:4.8.1" level="project" />
-    <orderEntry type="library" name="Maven: com.typesafe.scala-logging:scala-logging_2.12:3.9.4" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-api:2.17.2" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.logging.log4j:log4j-core:2.17.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-hadoop-cloud_2.12:3.3.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-openstack:3.3.2" level="project" />
     <orderEntry type="library" name="Maven: joda-time:joda-time:2.10.13" level="project" />

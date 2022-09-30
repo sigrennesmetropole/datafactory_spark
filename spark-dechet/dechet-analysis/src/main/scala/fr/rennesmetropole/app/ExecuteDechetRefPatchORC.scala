@@ -8,7 +8,7 @@ import org.apache.spark.sql.{DataFrame, SaveMode, SparkSession}
 import org.apache.spark.sql.types._
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
-
+import fr.rennesmetropole.tools.Utils.log
 import java.util.Properties
 
 object ExecuteDechetRefPatchORC{
@@ -19,10 +19,10 @@ object ExecuteDechetRefPatchORC{
       SYSDATE = args(0)
     } catch {
       case e: Throwable => {
-        println("Des arguments manquent")
-        println("Commande lancée :")
-        println("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
-        println("DATE : 2021-05-07 => yyyy/mm/dd")
+        log("Des arguments manquent")
+        log("Commande lancée :")
+        log("spark-submit --class fr.rennesmetropole.app.ExecuteDechetRefAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
+        log("DATE : 2021-05-07 => yyyy/mm/dd")
         throw new Exception("Pas d'arguments", e )
       }
     }
@@ -53,7 +53,7 @@ object ExecuteDechetRefPatchORC{
     val nameEnvProd = "tableProducteur"
     val nameEnvRecip = "tableRecipient"
     try {
-      println("Patch en cours...")
+      log("Patch en cours...")
       val df_lastestBac = ImportDechet.readDatedReferential(spark, SYSDATE, nameEnvRecip).withColumn("litrage_recipient_temp",col("litrage_recipient").cast(IntegerType)).drop(col("litrage_recipient")).withColumnRenamed("litrage_recipient_temp","litrage_recipient")
       if (Utils.envVar("TEST_MODE") == "False"){
         if(!df_lastestBac.head(1).isEmpty){

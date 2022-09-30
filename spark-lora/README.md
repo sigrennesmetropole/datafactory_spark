@@ -11,7 +11,7 @@ Lancement du container Spark :
     ./dc.sh exec spark bash
 
 Commande en local :
-spark-submit --class fr.rennesmetropole.app.ExecuteLoraAnalysis  --files /app-lora/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" /app-lora/lora/target/rm-lora-analysis-1.0-SNAPSHOT.jar 2021-09-27 
+spark-submit --master spark://spark:7077  --executor-cores 4 --executor-memory 2G --driver-memory 2G --class fr.rennesmetropole.app.ExecuteLoraAnalysis  --files /app-lora/conf/application.conf --conf "spark.driver.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" --conf "spark.executor.extraJavaOptions=-Dconfig.file=/app-lora/conf/application.conf" /app-lora/target/rm-lora-analysis-1.0-SNAPSHOT.jar 2022-09-01 
     
 
 ```

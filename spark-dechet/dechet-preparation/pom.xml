@@ -49,11 +49,11 @@
             <version>${scala.version}</version>
         </dependency>
 
-        <dependency> <!-- MiniIO Spark Select -->
+        <!-- <dependency> MiniIO Spark Select
             <groupId>io.minio</groupId>
             <artifactId>spark-select_2.11</artifactId>
             <version>2.1</version>
-        </dependency>
+        </dependency> -->
 
         <dependency> <!-- Core Spark -->
             <groupId>org.apache.spark</groupId>
@@ -85,6 +85,13 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-hadoop-cloud -->
+        <dependency>
+            <groupId>org.apache.spark</groupId>
+            <artifactId>spark-hadoop-cloud_${scala.binary.version}</artifactId>
+            <version>${spark.version}</version>
+        </dependency>
+
         <dependency>            <!-- Config -->
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
@@ -105,8 +112,9 @@
         <dependency>
             <groupId>com.crealytics</groupId>
             <artifactId>spark-excel_2.12</artifactId>
-            <version>0.13.7</version>
+            <version>3.2.2_0.18.0</version>
         </dependency>
+
 
         <!-- Test Scopes -->
         <dependency>

@@ -6,7 +6,7 @@ import fr.rennesmetropole.tools.Utils.logger
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.time.Instant
-
+import fr.rennesmetropole.tools.Utils.log
 object ExecuteDechetExutoireAnalysis {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
@@ -25,10 +25,10 @@ object ExecuteDechetExutoireAnalysis {
     } catch {
 
       case e: Throwable => {
-        println("Des arguments manquent")
-        println("Commande lancée :")
-        println("spark-submit --class fr.rennesmetropole.app.ExecuteDechetExutoireAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
-        println("DATE : 2021-01-13 => yyyy/mm/dd")
+        log("Des arguments manquent")
+        log("Commande lancée :")
+        log("spark-submit --class fr.rennesmetropole.app.ExecuteDechetExutoireAnalysis /app-dechet/target/rm-dechet-analysis-1.0-SNAPSHOT.jar <DATE>")
+        log("DATE : 2021-01-13 => yyyy/mm/dd")
         throw new Exception("Pas d'arguments", e )
       }
     }
@@ -59,14 +59,14 @@ object ExecuteDechetExutoireAnalysis {
     val nameEnv = "tableExutoire"
     try {
       val df_ImportDechetExutoire = ImportDechetExutoire.ExecuteImportDechetExutoire(spark, SYSDATE, nameEnv)
-      println("IMPORT DECHET Donnee exutoires")
+      log("IMPORT DECHET Donnee exutoires")
       df_ImportDechetExutoire.show(false)
       val df_AnalysedDechetExutoire = DechetExutoireAnalysis.ExecuteDechetExutoireAnalysis(spark, df_ImportDechetExutoire,SYSDATE,reprise)
-      println("ANALYSED DECHET Donnee exutoires")
+      log("ANALYSED DECHET Donnee exutoires")
       df_AnalysedDechetExutoire.show(false)
 
       val df_PartitionedDechetExutoire = Utils.dfToPartitionedDf(df_AnalysedDechetExutoire, SYSDATE)
-      println("PARTITIONED DECHET Donnees exutoires")
+      log("PARTITIONED DECHET Donnees exutoires")
       df_PartitionedDechetExutoire.show(false)
       if (Utils.envVar("TEST_MODE") == "False"){
         

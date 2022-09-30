@@ -6,7 +6,7 @@ import fr.rennesmetropole.tools.Utils
 import fr.rennesmetropole.tools.Utils.logger
 import javax.mail._
 import javax.mail.internet._
-
+import fr.rennesmetropole.tools.Utils.log
 object MailAgent {
 
   private val config: Config = ConfigFactory.load()
@@ -53,8 +53,8 @@ object MailAgent {
 
     message.setFrom(new InternetAddress(from))
     val dest = InternetAddress.parse(to).asInstanceOf[Array[Address]]  // to peut être une liste d'adresse email (ex : "abc@abc.example,abc@def.com,ghi@abc.example" )
-    println("destinataire:")
-    println(dest.mkString(";"))
+    log("destinataire:")
+    log(dest.mkString(";"))
     message.setRecipients(Message.RecipientType.TO, dest)
     message.setSubject(subject)
 
