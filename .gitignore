@@ -30,3 +30,6 @@ delivery/livraison_precedente/*
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/csv/*
 **/src/test/resources/Local/app/ExecuteDechetRefAnalysis/Input/latest_ref_prod/orc/*
 **/target/*
+*.iml
+*.ipr
+*.iws

@@ -1,13 +1,12 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.{Traitements, Utils}
 import org.apache.spark.sql._
 import org.apache.spark.sql.types._
 import org.json4s._
+import fr.rennesmetropole.tools.Utils.{log, show}
 
 object LoraAnalysis {
-  val logger = Logger(getClass.getName)
 
   /**
    * Fonction qui permet de créer un dataframe avec les donnée mise à plat et de merger le résultat des traitements 
@@ -17,7 +16,7 @@ object LoraAnalysis {
    * @param df    : le dataframe à traiter
    * @return
    */
-  def ExecuteLoraAnalysis(spark: SparkSession, df_raw: DataFrame, deveui: String, df_step: DataFrame): DataFrame = {
+  def ExecuteLoraAnalysis(spark: SparkSession, df_raw: DataFrame, deveui: String): DataFrame = {
     /** Schéma representant la sortie des données reçu mise à plat */
     val schema = StructType(
       List(
@@ -26,7 +25,10 @@ object LoraAnalysis {
         StructField("timestamp", StringType, false),
         StructField("name", StringType, false),
         StructField("value", FloatType),
-        StructField("inserteddate", FloatType)
+        StructField("inserteddate", FloatType),
+        StructField("year", StringType, false),
+        StructField("month", StringType, false),
+        StructField("day", StringType, false)
       )
     )
 
@@ -36,7 +38,7 @@ object LoraAnalysis {
     /** Map du dictionnaire de deveui capteurs / noms traitements sur les fonctions de traitement */
     val df_param = Utils.readFomPostgres(spark,Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_PARAM_NAME"))
     val param = Utils.getParam(df_param)
-    Traitements.traitement_pre_traitement(df_raw.filter(df_raw("deveui") === deveui), deveui, spark, param(deveui), df_step)
+    Traitements.traitement_pre_traitement(df_raw.filter(df_raw("deveui") === deveui), deveui, spark, param(deveui))
 
   }
 
@@ -55,7 +57,10 @@ object LoraAnalysis {
         StructField("disabledon", StringType, false),
         StructField("measurenatureid", StringType, false),
         StructField("unitid", StringType, false),
-        StructField("dataparameter", StringType, false)
+        StructField("dataparameter", StringType, false),
+        StructField("year", StringType, false),
+        StructField("month", StringType, false),
+        StructField("day", StringType, false)
       )
     )
 
@@ -79,7 +84,7 @@ object LoraAnalysis {
 
     /** On selectionne les bonnes colonnes pour ne pas avoir de colonnes en double suite a la jointure */
 
-    val df_join_clean = df_join.select("a.id", "a.deveui", "b.enabledon", "a.tramedate", "a.name", "a.value", "a.insertedDate", "b.measurenatureid", "b.unitid")
+    val df_join_clean = df_join.select("a.id", "a.deveui", "b.enabledon", "a.tramedate", "a.name", "a.value", "a.insertedDate", "b.measurenatureid", "b.unitid","a.year","a.month","a.day")
       .withColumnRenamed("insertedDate","inserteddate")
 
     df_join_clean

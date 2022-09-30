@@ -1,0 +1,53 @@
+{
+    "sensor_id": "0018b22000003e90",
+    "deveui": "0018b22000003e90",
+    "timestamp": "2022-09-02T03:17:22+02:00",
+    "payload_ciphered": null,
+    "payload_deciphered": "577000950090",
+    "data": {
+        "type": "0x57 Temp 3 periodic data",
+        "status": {
+            "frameCounter": 3,
+            "hardwareError": false,
+            "lowBattery": false,
+            "configurationDone": false,
+            "configurationInconsistency": false,
+            "configuration2ChannelsActivated": true
+        },
+        "decodingInfo": "values: [t=0, t-1, t-2, ...]",
+        "temperatures": [
+            {
+                "name": "temperature 1",
+                "unit": "°C",
+                "values": [
+                    14.9
+                ]
+            },
+            {
+                "name": "temperature 2",
+                "unit": "°C",
+                "values": [
+                    14.4
+                ]
+            }
+        ]
+    },
+    "lorawan": {
+        "type": "unconfirmed_data_up",
+        "devaddr": "00003e90",
+        "adr": true,
+        "fcnt": 13091,
+        "port": 1
+    },
+    "lora": {
+        "freq": 867.1,
+        "data_rate": "SF7BW125",
+        "rssi": -105,
+        "lsnr": 4.2
+    },
+    "gateway": {
+        "best": "AA555A000B032480",
+        "number": 11
+    },
+    "gps": []
+}

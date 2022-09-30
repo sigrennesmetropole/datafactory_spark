@@ -113,10 +113,17 @@
             <version>4.8.1</version>
             <scope>test</scope>
         </dependency>
+
         <dependency>
-            <groupId>com.typesafe.scala-logging</groupId>
-            <artifactId>scala-logging_${scala.binary.version}</artifactId>
-            <version>3.9.4</version>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.apache.logging.log4j/log4j-core -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.17.2</version>
         </dependency>
         <!-- https://mvnrepository.com/artifact/org.apache.spark/spark-hadoop-cloud -->
         <dependency>

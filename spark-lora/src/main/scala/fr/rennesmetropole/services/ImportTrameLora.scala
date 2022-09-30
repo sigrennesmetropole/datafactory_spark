@@ -1,14 +1,13 @@
 package fr.rennesmetropole.services
 
-import com.typesafe.scalalogging.Logger
 import fr.rennesmetropole.tools.Utils
 import org.apache.spark.sql.types._
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import fr.rennesmetropole.tools.Utils.{getClass, log, show}
+import org.apache.logging.log4j.LogManager
 
-
-object ImportLora {
-
-  val logger = Logger(getClass.getName)
+object ImportTrameLora {
+  val logger = LogManager.getLogger(getClass.getName)
 
   /**
    * Declare un dataframe via la lecture par date dans MinIO 
@@ -43,7 +42,7 @@ object ImportLora {
       Utils.readData(spark, DATE, schema, deveui)
     } catch {
       case e: Throwable => {
-        logger.error("Erreur de chargement des fichiers depuis MinIO") 
+        logger.error("Erreur de chargement des fichiers depuis MinIO")
         throw new Exception("Erreur de chargement des fichiers depuis MinIO", e)
       }
     }
