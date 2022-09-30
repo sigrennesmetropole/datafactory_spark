@@ -157,7 +157,7 @@ object Utils {
     log("fonction suppression fini")
 
     //Passing in the URL, table in which data will be written and relevant connection properties
-    dfToWrite.write.mode(SaveMode.Overwrite).jdbc(pgUrl, pgTable, connectionProps)
+    dfToWrite.write.mode(SaveMode.Append).jdbc(pgUrl, pgTable, connectionProps)
   }
 
   def delete_partition_reprise(table_name: String, pgUrl: String, DATE_debut: String,DATE_fin: String, deveui: String) {

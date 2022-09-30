@@ -120,10 +120,9 @@ object ExecuteLoraAnalysis {
                   if (!df_LoraAnalyzed.head(1).isEmpty) {
                     /** Retourne le dataframe après enrichissement */
                     val df_LoraEnrichi = LoraAnalysis.enrichissement_Basique(spark, df_LoraAnalyzed)
-                    println("-- df pre postgres --")
-                    df_LoraEnrichi.show(false)
-
                     partitionedDf = Utils.dfToPartitionedDf(df_LoraEnrichi, SYSDATE)
+                    println("-- df pre postgres --")
+                    partitionedDf.show(false)
                   } else {
                     println("Aucune données après l'analyse, peut être que le référentiel est incomplet...")
                   }
