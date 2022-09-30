@@ -17,7 +17,7 @@ object LoraAnalysis {
    * @param df    : le dataframe à traiter
    * @return
    */
-  def ExecuteLoraAnalysis(spark: SparkSession, df_raw: DataFrame, deveui: String): DataFrame = {
+  def ExecuteLoraAnalysis(spark: SparkSession, df_raw: DataFrame, deveui: String, df_step: DataFrame): DataFrame = {
     /** Schéma representant la sortie des données reçu mise à plat */
     val schema = StructType(
       List(
@@ -36,7 +36,7 @@ object LoraAnalysis {
     /** Map du dictionnaire de deveui capteurs / noms traitements sur les fonctions de traitement */
     val df_param = Utils.readFomPostgres(spark,Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_PARAM_NAME"))
     val param = Utils.getParam(df_param)
-    Traitements.traitement_pre_traitement(df_raw.filter(df_raw("deveui") === deveui), deveui, spark, param(deveui))
+    Traitements.traitement_pre_traitement(df_raw.filter(df_raw("deveui") === deveui), deveui, spark, param(deveui), df_step)
 
   }
 

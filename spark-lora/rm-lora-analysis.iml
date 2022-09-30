@@ -30,7 +30,6 @@
     <orderEntry type="library" name="Maven: org.apache.spark:spark-launcher_2.12:3.3.0" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-kvstore_2.12:3.3.0" level="project" />
     <orderEntry type="library" name="Maven: org.fusesource.leveldbjni:leveldbjni-all:1.8" level="project" />
-    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.13.3" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-network-common_2.12:3.3.0" level="project" />
     <orderEntry type="library" name="Maven: com.google.crypto.tink:tink:1.6.1" level="project" />
     <orderEntry type="library" name="Maven: org.apache.spark:spark-network-shuffle_2.12:3.3.0" level="project" />
@@ -147,15 +146,6 @@
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-common:3.3.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop.thirdparty:hadoop-shaded-protobuf_3_7:1.1.1" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-annotations:3.3.2" level="project" />
-    <orderEntry type="module-library">
-      <library name="Maven: jdk.tools:jdk.tools:1.8">
-        <CLASSES>
-          <root url="jar://$USER_HOME$/.jdks/corretto-1.8.0_332/jre/../lib/tools.jar!/" />
-        </CLASSES>
-        <JAVADOC />
-        <SOURCES />
-      </library>
-    </orderEntry>
     <orderEntry type="library" name="Maven: org.apache.hadoop.thirdparty:hadoop-shaded-guava:1.1.1" level="project" />
     <orderEntry type="library" name="Maven: com.google.guava:guava:27.0-jre" level="project" />
     <orderEntry type="library" name="Maven: com.google.guava:failureaccess:1.0" level="project" />
@@ -164,7 +154,6 @@
     <orderEntry type="library" name="Maven: org.codehaus.mojo:animal-sniffer-annotations:1.17" level="project" />
     <orderEntry type="library" name="Maven: commons-cli:commons-cli:1.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.httpcomponents:httpclient:4.5.13" level="project" />
-    <orderEntry type="library" name="Maven: org.apache.httpcomponents:httpcore:4.4.13" level="project" />
     <orderEntry type="library" name="Maven: commons-net:commons-net:3.6" level="project" />
     <orderEntry type="library" name="Maven: javax.servlet:javax.servlet-api:3.1.0" level="project" />
     <orderEntry type="library" name="Maven: jakarta.activation:jakarta.activation-api:1.2.1" level="project" />
@@ -245,7 +234,7 @@
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-mapreduce-client-common:3.3.2" level="project" />
     <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-aws:3.3.2" level="project" />
     <orderEntry type="library" name="Maven: com.amazonaws:aws-java-sdk-bundle:1.11.1026" level="project" />
-    <orderEntry type="library" scope="RUNTIME" name="Maven: org.wildfly.openssl:wildfly-openssl:1.0.7.Final" level="project" />
+    <orderEntry type="library" name="Maven: org.wildfly.openssl:wildfly-openssl:1.0.7.Final" level="project" />
     <orderEntry type="library" name="Maven: com.typesafe:config:1.3.2" level="project" />
     <orderEntry type="library" name="Maven: org.eclipse.jetty:jetty-servlet:11.0.6" level="project" />
     <orderEntry type="library" name="Maven: org.eclipse.jetty:jetty-security:11.0.6" level="project" />
@@ -255,5 +244,30 @@
     <orderEntry type="library" scope="TEST" name="Maven: org.scalatest:scalatest_2.12:3.0.8" level="project" />
     <orderEntry type="library" scope="TEST" name="Maven: junit:junit:4.8.1" level="project" />
     <orderEntry type="library" name="Maven: com.typesafe.scala-logging:scala-logging_2.12:3.9.4" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.spark:spark-hadoop-cloud_2.12:3.3.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-openstack:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: joda-time:joda-time:2.10.13" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.core:jackson-annotations:2.13.3" level="project" />
+    <orderEntry type="library" name="Maven: com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.13.3" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.httpcomponents:httpcore:4.4.14" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-azure:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: com.microsoft.azure:azure-storage:7.0.1" level="project" />
+    <orderEntry type="library" name="Maven: com.microsoft.azure:azure-keyvault-core:1.0.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-cloud-storage:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-aliyun:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: com.aliyun.oss:aliyun-sdk-oss:3.13.0" level="project" />
+    <orderEntry type="library" name="Maven: org.jdom:jdom2:2.0.6" level="project" />
+    <orderEntry type="library" name="Maven: com.aliyun:aliyun-java-sdk-core:4.5.10" level="project" />
+    <orderEntry type="library" name="Maven: org.ini4j:ini4j:0.5.4" level="project" />
+    <orderEntry type="library" name="Maven: io.opentracing:opentracing-api:0.33.0" level="project" />
+    <orderEntry type="library" name="Maven: io.opentracing:opentracing-util:0.33.0" level="project" />
+    <orderEntry type="library" name="Maven: io.opentracing:opentracing-noop:0.33.0" level="project" />
+    <orderEntry type="library" name="Maven: com.aliyun:aliyun-java-sdk-ram:3.1.0" level="project" />
+    <orderEntry type="library" name="Maven: com.aliyun:aliyun-java-sdk-kms:2.11.0" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-azure-datalake:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: com.microsoft.azure:azure-data-lake-store-sdk:2.3.9" level="project" />
+    <orderEntry type="library" name="Maven: org.apache.hadoop:hadoop-cos:3.3.2" level="project" />
+    <orderEntry type="library" name="Maven: com.qcloud:cos_api-bundle:5.6.19" level="project" />
+    <orderEntry type="library" name="Maven: org.eclipse.jetty:jetty-util-ajax:9.4.46.v20220331" level="project" />
   </component>
 </module>
