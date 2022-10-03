@@ -144,7 +144,7 @@ object DechetAnalysis {
     //calcul des moyennes pour les pesé avec bac rattaché et pour chaque type de récipient
     for (flux_lit <- liste_litrage_flux) {
       var df_moyenne = df_join.filter(
-        date_format(df_join("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+        date_format(df_join("date_mesure"),"yyyy-MM")===lit(dateRef) &&
           df_join("poids")>0 && df_join("poids")<250 &&
           df_join("categorie_recipient")===lit(flux_lit._2) &&
           df_join("litrage_recipient").isin(flux_lit._3.split("-"):_*)
@@ -161,7 +161,7 @@ object DechetAnalysis {
     log("mapMoyenneBacRattache : " + mapMoyenneBacRattache.mkString(" - "))
     //calcul des moyennes pour les pesé avec bac non rattaché et pour chaque type de récipient
     for (flux_global <- liste_flux) {
-      val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+      val moyenne = df_support.filter(date_format(df_support("date_mesure"),"yyyy-MM")===lit(dateRef) &&
         df_support("poids")>0 && df_support("poids")<250 &&
         df_support("code_tournee").contains(flux_global._2)
       ).groupBy("code_tournee").agg(avg("poids").as("moyenne_poids"))
@@ -175,7 +175,7 @@ object DechetAnalysis {
     }
     log("mapMoyenneSansBacRattache : " + mapMoyenneSansBacRattache.mkString(" - "))
     //Calcul moyenne des flux Inconnu et Autres
-    val moyenne = df_support.filter(date_format(df_support("date_mesure"),"YYYY-MM")===lit(dateRef) &&
+    val moyenne = df_support.filter(date_format(df_support("date_mesure"),"yyyy-MM")===lit(dateRef) &&
       df_support("poids")>0 && df_support("poids")<250)
       .agg(avg("poids").as("moyenne_poids"))
     //Variable pour le moyennes  globales même mois année-1 sans bac rattaché
@@ -211,7 +211,7 @@ object DechetAnalysis {
       val df_correction_invalide = df_history.groupBy("id_bac").count().filter("count<3").drop("count")
       show(df_correction_invalide,"df_count_non_valide")
       //jointure entre les données a corriger de la journée et le référentiel pour les collecte dechets qui sont rattaché a des bacs
-      var df_correction = df_a_redresser.where(date_format(col("date_crea"),"YYYY-MM-dd")===lit(date)).join(df_refBac,Seq("id_bac"),"left") // JOINTURE pour récupérer les dechet qui sont avec des bacs
+      var df_correction = df_a_redresser.where(date_format(col("date_crea"),"yyyy-MM-dd")===lit(date)).join(df_refBac,Seq("id_bac"),"left") // JOINTURE pour récupérer les dechet qui sont avec des bacs
         .drop(df_refBac("code_puce")).drop(df_refBac("year")).drop(df_refBac("month")).drop(df_refBac("day")).drop(df_refBac("date_modif")).drop(df_refBac("date_crea")) // drop des colonnes en trop dû a la jointure
       df_correction = df_correction.join(df_correction_valide,Seq("id_bac"),"left")
       df_correction = df_correction.withColumn("poids_corr",when(col("poids")===lit("0.0"),col("avg")).otherwise(col("poids_corr"))).drop("avg")
