@@ -72,6 +72,7 @@ object ExecuteDechetExutoireAnalysis {
         
         if(!df_PartitionedDechetExutoire.head(1).isEmpty){
           Left(Utils.writeToS3(spark,df_PartitionedDechetExutoire,nameEnv, SYSDATE))
+          //TODO job exposure pour exutoire
           Left(Utils.postgresPersist(spark, Utils.envVar("POSTGRES_URL"), df_PartitionedDechetExutoire, Utils.envVar("POSTGRES_TABLE_DECHET_EXUTOIRE"),SYSDATE))
         }
         else {

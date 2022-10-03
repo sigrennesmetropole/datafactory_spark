@@ -403,12 +403,12 @@ def log(msg:Any):Unit ={
     val postURL = date2URL(DATE)
     log("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
-    df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+    df_toWrite.repartition(2)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write.options(Map("header"->"true", "delimiter"->";","compression"->"gzip"))
       .mode(SaveMode.Append)
       .csv(Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
-    df_toWrite.repartition(1)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+    df_toWrite.repartition(2)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write
       .mode(SaveMode.Append)
       .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/")
@@ -433,7 +433,16 @@ def log(msg:Any):Unit ={
     log("Write to s3 Done")
   }
 
-  def writeToS3ForPatchOrc(spark: SparkSession, df_toWrite: DataFrame, nameEnv :String, DATE :String): Unit = {
+  def writeToBeRedressedToS3(spark: SparkSession, df_toWrite: DataFrame, nameEnv: String, DATE: String): Unit={
+    val postURL = date2URL(DATE)
+    log("Write to s3 to " + Utils.tableVar(nameEnv, "redressed_bucket") + postURL)
+
+    df_toWrite.repartition(1) // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
+      .write
+      .mode(SaveMode.Append)
+      .orc(Utils.tableVar(nameEnv, "redressed_bucket") + postURL )
+  }
+    def writeToS3ForPatchOrc(spark: SparkSession, df_toWrite: DataFrame, nameEnv :String, DATE :String): Unit = {
     val postURL = date2URL(DATE)
     log("Write to s3 to " + Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
 
@@ -575,7 +584,7 @@ def log(msg:Any):Unit ={
   def type_flux_UDF(mode:String): UserDefinedFunction = {
     mode match {
       case "pre_flux" =>
-        val type_flux = (categorie_recipient:String,code_immat:String) =>{Utils.type_flux(categorie_recipient,code_immat) }
+        val type_flux = (categorie_recipient:String,code_tournee:String) =>{Utils.type_flux(categorie_recipient,code_tournee) }
         udf(type_flux)
       case "post_flux" =>
         val type_flux = (type_flux:String,code_immat:String,categorie_recipient_moyen:String) =>{Utils.type_flux(type_flux,code_immat,categorie_recipient_moyen) }
@@ -583,29 +592,28 @@ def log(msg:Any):Unit ={
     }
   }
 
-  def type_flux(categorie_recipient:String,code_immat:String):String={
-    (stripAccents(categorie_recipient),code_immat) match {
-      case (null,y) =>
-        if(y!=null){
+  def type_flux(categorie_recipient:String,code_tournee:String):String={
+    (stripAccents(categorie_recipient),code_tournee) match {
+      case (null,null) =>
+        "Inconnu"
+      case (null,_) =>
           "Inconnu_connu"
-        }else {
-          "Inconnu"
-        }
+
       case (x,_) if x.contains("Bacs ordures menageres") =>
         "OM"
       case (x,_) if x.contains("Bacs collecte selective") =>
         "CS"
       case (x,_) if x.contains("Bacs verre") =>
-        "verre"
+        "Verre"
       case (x,_) if x.contains("Bacs biodechets") =>
         "Biodechets"
-      case (x,_) if x.contains("OM") =>
+      case (_,y) if y!=null && y.endsWith("OM") =>
         "OM"
-      case (x,_) if x.contains("CS") =>
+      case (_,y) if y!=null && y.endsWith("CS") =>
         "CS"
-      case (x,_) if x.contains("VE") =>
+      case (_,y) if y!=null && y.endsWith("VE") =>
         "Verre"
-      case (x,_) if x.contains("BIO") =>
+      case (_,y) if y!=null && y.endsWith("BIO") =>
         "Biodechets"
       case (x,_) if (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs")) =>
         "Autres"
@@ -613,35 +621,26 @@ def log(msg:Any):Unit ={
         "Inconnu"
     }
   }
-  def type_flux(categorie_recipient:String,code_immat:String,categorie_recipient_moyen:String):String={
-    (stripAccents(categorie_recipient),code_immat,categorie_recipient_moyen) match {
-      case (null,y,_) =>
-        if(y!=null){
-          "Inconnu_connu"
-        }else {
-          "Inconnu"
-        }
+  def type_flux(type_flux:String,code_immat:String,categorie_recipient_moyen:String):String={
+    (stripAccents(type_flux),code_immat,categorie_recipient_moyen) match {
       case (x,_,z) if x.contains("Inconnu_connu") =>
-        z
-      case (x,_,_) if x.contains("Bacs ordures menageres") =>
+        if(z==null) {
+          "Inconnu"
+        }else {
+          z
+        }
+      case (x,_,_) if x.matches("Bacs ordures menageres|OM") =>
         "OM"
-      case (x,_,_) if x.contains("Bacs collecte selective") =>
+      case (x,_,_) if x.matches("Bacs collecte selective|CS") =>
         "CS"
-      case (x,_,_) if x.contains("Bacs verre") =>
-        "verre"
-      case (x,_,_) if x.contains("Bacs biodechets") =>
+      case (x,_,_) if x.matches("Bacs verre|VE|Verre") =>
+        "Verre"
+      case (x,_,_) if x.matches("Bacs biodechets|BIO|Biodechets") =>
         "Biodechets"
-      case (x,_,_) if x.contains("OM") =>
-        "OM"
-      case (x,_,_) if x.contains("CS") =>
-        "CS"
-      case (x,_,_) if x.contains("VE") =>
-        "verre"
-      case (x,_,_) if x.contains("BIO") =>
-        "Biodechets"
-      case (x,_,_) if (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs")) =>
+      case (x,_,_) if (x.matches("Bacs carton|Bacs papier|Composteurs")) =>
         "Autres"
       case _ =>
+        println()
         "Inconnu"
     }
   }
@@ -653,56 +652,62 @@ def log(msg:Any):Unit ={
 
   def redressementCollecte(code_tournee:String,poids:String,typeFlux:String):String={
     (typeFlux,poids.toDouble) match {
+      case (null,poids) =>
+        if (0 < poids && poids < 250) {
+          poids.toString
+        } else {
+          "0.0"
+        }
       case ("OM",poids) =>
         if(0<poids && poids<120){
           poids.toString
         }else {
-          "0"
+          "0.0"
         }
       case ("CS",poids) =>
         if(0<poids && poids<40){
           poids.toString
         }else {
-          "0"
+          "0.0"
         }
       case ("Verre",poids) =>
         if(0<poids && poids<240){
           poids.toString
         }else {
-          "0"
+          "0.0"
         }
       case (x,poids) if (x.contains("Biodechets") || x.contains("Inconnu") || x.contains("Autres"))=>
         if(0<poids && poids<250){
           poids.toString
         }else {
-          "0"
+          "0.0"
         }
       case _ =>
-        "0"
+        "0.0"
     }
   }
 
-  def redressementCorrectionInvalideUDF(mapMoyenneBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneBacInconnu:Double):UserDefinedFunction = {
+  def redressementCorrectionInvalideUDF(mapMoyenneBacRattache:scala.collection.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.Map[String,Double],mapMoyenneBacInconnu:Double):UserDefinedFunction = {
     val redressement = (typeFlux:String,litrage_recipient:String,poids_corr:String) =>{Utils.redressementCorrectionInvalide(typeFlux,litrage_recipient,poids_corr,mapMoyenneBacRattache,mapMoyenneSansBacRattache,mapMoyenneBacInconnu) }
     udf(redressement)
   }
-  def redressementCorrectionInvalide(typeFlux:String,litrage_recipient:String,poids_corr:String,mapMoyenneBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.mutable.Map[String,Double],mapMoyenneBacInconnu:Double):String={
-    (typeFlux,litrage_recipient,poids_corr) match {
+  def redressementCorrectionInvalide(typeFlux:String,litrage_recipient:String,poids_corr:String,mapMoyenneBacRattache:scala.collection.Map[String,Double],mapMoyenneSansBacRattache:scala.collection.Map[String,Double],mapMoyenneBacInconnu:Double):String={
+    (stripAccents(typeFlux),litrage_recipient,poids_corr) match {
       case (_,_,poids_corr) if(poids_corr != null) =>
-
          BigDecimal(poids_corr).setScale(2, BigDecimal.RoundingMode.HALF_UP).toString.replace(".00",".0")
 
-      case ("Autres",_,_)  =>
+      case (other,_,_) if(other.matches("Autres|Inconnu")) => // TODO Inconnu peut être a jeter
+        log("cas de redressement Autres ou Inconnu, Moyenne bac inconnu utilisé \n valeur: typeFlux -> " + typeFlux + " - litrage_recipient -> " + litrage_recipient + " - poids_corr -> " +  poids_corr)
         mapMoyenneBacInconnu.toString
       //correction des données dechet qui ne sont pas rattaché a des bacs
       case ("OM",null,_) =>
-        mapMoyenneSansBacRattache.get("OMglobal").toString
+        OptionToValue(mapMoyenneSansBacRattache.get("OMglobal"))
       case ("CS",null,_) =>
-        mapMoyenneSansBacRattache.get("CSglobal").toString
+        OptionToValue(mapMoyenneSansBacRattache.get("CSglobal"))
       case ("Verre",null,_)  =>
-        mapMoyenneSansBacRattache.get("VEglobal").toString
-      case ("Biodéchets",null,_) =>
-        mapMoyenneSansBacRattache.get("BIOglobal").toString
+        OptionToValue(mapMoyenneSansBacRattache.get("VEglobal"))
+      case ("Biodechets",null,_) =>
+        OptionToValue(mapMoyenneSansBacRattache.get("BIOglobal"))
       // correction des données dechets qui sont rattaché a des bacs mais qui n'ont pas au moins 6 valeur historisé
       case ("OM",litrage,_) if(litrage.matches("1|120|140")) =>
         OptionToValue(mapMoyenneBacRattache.get("OM140"))
@@ -714,7 +719,7 @@ def log(msg:Any):Unit ={
         OptionToValue(mapMoyenneBacRattache.get("OM360"))
       case ("OM",litrage,_) if(litrage.matches("400")) =>
         OptionToValue(mapMoyenneBacRattache.get("OM400"))
-      case ("OM",litrage,_) if(litrage.matches("500|600")) =>
+      case ("OM",litrage,_) if(litrage.matches("500|660")) =>
         OptionToValue(mapMoyenneBacRattache.get("OM660"))
       case ("OM",litrage,_) if(litrage.matches("750|770|1000")) =>
         OptionToValue(mapMoyenneBacRattache.get("OM770"))
@@ -726,7 +731,7 @@ def log(msg:Any):Unit ={
         OptionToValue(mapMoyenneBacRattache.get("CS240"))
       case ("CS",litrage,_) if(litrage.matches("330|340|360")) =>
         OptionToValue(mapMoyenneBacRattache.get("CS360"))
-      case ("CS",litrage,_) if(litrage.matches("500|600")) =>
+      case ("CS",litrage,_) if(litrage.matches("500|660")) =>
         OptionToValue(mapMoyenneBacRattache.get("CS660"))
       case ("CS",litrage,_) if(litrage.matches("750|770|1000")) =>
         OptionToValue(mapMoyenneBacRattache.get("CS770"))
@@ -736,12 +741,25 @@ def log(msg:Any):Unit ={
         OptionToValue(mapMoyenneBacRattache.get("VE400"))
       case ("Verre",litrage,_) if(litrage.matches("750|770|1000")) =>
         OptionToValue(mapMoyenneBacRattache.get("VE770"))
-      case ("Biodéchets",litrage,_) if(litrage.matches("120|140")) =>
+      case ("Biodechets",litrage,_) if(litrage.matches("120|140")) =>
         OptionToValue(mapMoyenneBacRattache.get("BIO140"))
-      case ("Biodéchets",litrage,_) if(litrage.matches("240")) =>
+      case ("Biodechets",litrage,_) if(litrage.matches("240")) =>
         OptionToValue(mapMoyenneBacRattache.get("BIO240"))
-      case ("Biodéchets",litrage,_) if(litrage.matches("400")) =>
+      case ("Biodechets",litrage,_) if(litrage.matches("400")) =>
         OptionToValue(mapMoyenneBacRattache.get("BIO400"))
+      //correction de données si le litrage récipient n'est pas cohérent
+      case ("OM", _, _) =>
+        OptionToValue(mapMoyenneSansBacRattache.get("OMglobal"))
+      case ("CS", _, _) =>
+        OptionToValue(mapMoyenneSansBacRattache.get("CSglobal"))
+      case ("Verre", _, _) =>
+        OptionToValue(mapMoyenneSansBacRattache.get("VEglobal"))
+      case ("Biodechets", _, _) =>
+        OptionToValue(mapMoyenneSansBacRattache.get("BIOglobal"))
+     //cas par défaut
+      case (typeFlux,litrage_recipient,poids_corr) =>
+        log("cas de redressement non cohérent, Moyenne bac inconnu utilisé \n valeur: typeFlux -> " + typeFlux + " - litrage_recipient -> " + litrage_recipient + " - poids_corr -> " +  poids_corr)
+        mapMoyenneBacInconnu.toString
     }
   }
 
@@ -771,7 +789,7 @@ def log(msg:Any):Unit ={
         if (desc != null) {
           log (desc)
         }
-        df.show (50,false)
+        df.show (20,false)
 
       case "3" =>
         if (desc != null) {

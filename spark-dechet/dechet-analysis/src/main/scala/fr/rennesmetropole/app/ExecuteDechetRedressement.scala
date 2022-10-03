@@ -2,11 +2,12 @@ package fr.rennesmetropole.app
 
 import fr.rennesmetropole.services.{DechetAnalysis, ImportDechet}
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.{show,logger}
+import fr.rennesmetropole.tools.Utils.{logger, show}
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.time.Instant
 import fr.rennesmetropole.tools.Utils.log
+import org.apache.spark.sql.functions.{col, date_format}
 object ExecuteDechetRedressement {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
@@ -53,6 +54,7 @@ object ExecuteDechetRedressement {
 
     val nameEnv = "tableCollecte"
     val nameEnvRecip = "tableRecipient"
+    var exception = ""
     try {
       //Import des referentiels Bacs
       val df_lastestBac = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvRecip)
@@ -62,7 +64,21 @@ object ExecuteDechetRedressement {
       show(df_a_redresser,"df_a_redresser")
       //Redressement des données
       val df_redresse = DechetAnalysis.redressement_donne_incorrect(df_a_redresser,df_support,df_lastestBac,spark,dateRef,SYSDATE)
-      Right(df_redresse)
+
+      if (df_redresse.head(1).isEmpty) {
+        exception = exception + "Pas de données collecte redresse a écrire dans minio, arrêt de la chaine de traitement... \n"
+      }
+      logger.error("exception :" + exception)
+      if (exception != "" && Utils.envVar("TEST_MODE") == "False") {
+        throw new Exception(exception)
+      }
+
+      if (Utils.envVar("TEST_MODE") == "False" && (!df_redresse.head(1).isEmpty)) {
+        Left(Utils.writeToS3(spark, df_redresse, nameEnv, SYSDATE))
+      }
+      else {
+        Right(df_redresse)
+      }
     } catch {
       case e: Throwable => {
         logger.error("Echec du traitement de redresseement des Dechets")

@@ -53,6 +53,7 @@ object ExecuteDechetAnalysis {
 
     val nameEnv = "tableCollecte"
     val nameEnvRecip = "tableRecipient"
+    var exception = ""
     try {
       val df_ImportDechet = ImportDechet.ExecuteImportDechet(spark, SYSDATE, nameEnv)
       val df_lastestBac = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvRecip)
@@ -71,8 +72,16 @@ object ExecuteDechetAnalysis {
         log("Aucune donnee importe, skip du traitement...")
       }
 
+      if (df_PartitionedDechet.head(1).isEmpty) {
+        exception = exception + "Pas de données collecte analysé a écrire dans minio, arrêt de la chaine de traitement... \n"
+      }
+      logger.error("exception :" + exception)
+      if (exception != "" && Utils.envVar("TEST_MODE") == "False") {
+        throw new Exception(exception)
+      }
+
       if (Utils.envVar("TEST_MODE") == "False" && (!df_PartitionedDechet.head(1).isEmpty)) {
-        Left(Utils.writeToS3(spark,df_PartitionedDechet,nameEnv,SYSDATE))
+        Left(Utils.writeToBeRedressedToS3(spark,df_PartitionedDechet,nameEnv,SYSDATE))
       }
       else {
         Right(df_PartitionedDechet)

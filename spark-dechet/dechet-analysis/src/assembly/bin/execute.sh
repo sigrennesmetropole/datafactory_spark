@@ -75,6 +75,9 @@ then
 	then
 		api="false"
 	fi
+elif [ $TYPE == "collecteRedressement" ];
+then
+	SPARKCLASS=${sparkClassCollecteRedressement}
 else
 printf "${red}Something went wrong, we don't recognize the type of execution you want, you give $TYPE -> we want either collecte or ref ${end}\n"
 exit 1

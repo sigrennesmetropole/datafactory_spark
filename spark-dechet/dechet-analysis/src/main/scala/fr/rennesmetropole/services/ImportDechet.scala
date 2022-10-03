@@ -79,7 +79,7 @@ object ImportDechet {
       val pathDf = spark
         .read
         .orc(URL+"latest")
-      pathDf.show()
+      pathDf.show(false)
 
       val readDf = spark
         .read.options(Map("header"->"true", "delimiter"->";"))
@@ -394,17 +394,28 @@ object ImportDechet {
     val date = DATE.split("-") // date devant etre sous la forme yyyy-mm-dd
     val year = date(0);
     var month = date(1);
+    var monthSupport = date(1);
+    var namePathSupport = "analysed_bucket"
+    var namePathRawData = "redressed_bucket"
+    var type_support = "orc"
     if(year.matches("2022")){
-      month = "01";
+      monthSupport = "01";
+      type_support = "csv"
     }
     val year_ref = year.toInt-1
     val dateRef = year_ref+"-"+month
-    log("DATE Donne support :" + dateRef)
+    val dateSupport = year_ref+"-"+monthSupport
+    log("DATE Donne support mesure :" + dateRef)
+    log("DATE Donne support minio :" + dateSupport)
     // return un dataframe contenant les donnees qui vont permettre de corrigé les donnees qui vienne d'etre integrer
-    var namePath ="analysed_bucket"
+
     if (Utils.envVar("TEST_MODE") == "True"){
-      namePath = "analysed_bucket_test"
+      namePathSupport = "analysed_bucket_test"
+      namePathRawData ="analysed_bucket_test"
+      (Utils.readDataPath(spark, dateSupport, nameEnv,namePathSupport,"csv"),Utils.readDataPath(spark,DATE,nameEnv,namePathRawData,"csv"),dateRef)
     }
-    (Utils.readDataPath(spark, dateRef, nameEnv,namePath,"csv"),Utils.readDataPath(spark,DATE,nameEnv,namePath,"csv"),dateRef)
-  }
+    else {
+      (Utils.readDataPath(spark, dateSupport, nameEnv, namePathSupport, type_support), Utils.readDataPath(spark, DATE, nameEnv, namePathRawData, "orc"), dateRef)
+    }
+    }
 }

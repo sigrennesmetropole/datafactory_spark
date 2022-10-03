@@ -1,7 +1,7 @@
 package fr.rennesmetropole.services
 
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.{show,logger}
+import fr.rennesmetropole.tools.Utils.{log, show}
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -10,7 +10,8 @@ import org.slf4j.LoggerFactory
 import java.sql.Timestamp
 import java.time.Instant
 import java.util.Properties
-import fr.rennesmetropole.tools.Utils.log
+import org.apache.spark.sql.expressions.Window
+
 object DechetAnalysis {
   val frTZ = java.time.ZoneId.of("Europe/Paris")
   var now = Timestamp.from(java.time.ZonedDateTime.now(frTZ).withNano(0).toInstant)
@@ -86,7 +87,7 @@ object DechetAnalysis {
           .filter(col("date_mesure") > col("date_fin")
             || col("date_mesure") < col("date_debut"))*/
        //Partie redressement données
-        val df_poids_corr = redressement_donne(df_withTimestamp,spark)
+        val df_poids_corr = redressement_donne(df_withTimestamp,spark,SYSDATE)
         df_poids_corr.select("date_mesure","code_puce", "id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif","type_flux")
       }catch{
         case e:Throwable =>
@@ -97,24 +98,31 @@ object DechetAnalysis {
       spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
     }
   }
-  def redressement_donne(df_raw: DataFrame, spark: SparkSession): DataFrame = {
+  def redressement_donne(df_raw: DataFrame, spark: SparkSession,date:String): DataFrame = {
   // on identifie les type de flux
-    var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_immat")))
+    var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_tournee")))
     show(df_withTypeFlux,"df_withTypeFlux")
-    //On récupère la liste des code_immat qui n'ont pas de catégorie récipient mais qui sont déductible car code_immat non null
-    var df_categorieRecipientNull_and_CodeImmatNotNull = df_withTypeFlux.select("type_flux","code_immat").where(col("type_flux")===lit("Inconnu_connu")).select("code_immat")
+
+    //On récupère la liste des code_immat qui n'ont pas de catégorie récipient et pas de code_tourne mais qui sont déductible car code_immat non null
+    var df_categorieRecipientNull_and_CodeImmatNotNull = df_withTypeFlux.select("type_flux","code_immat").where(col("type_flux")===lit("Inconnu_connu")).select("code_immat").distinct()
     show(df_categorieRecipientNull_and_CodeImmatNotNull,"df_categorieRecipientNull_and_CodeImmatNotNull")
+
     //On récupère les code_immat qui corresponde a des catégorie_recipient null pour determiner le flux le plus probable (flux que le camion a le plus récupéré)
-    val dataset_of_codeImmat = df_categorieRecipientNull_and_CodeImmatNotNull.collect()
-    dataset_of_codeImmat.foreach(row =>{
-      //determination du flux le plus probable en comptant et en prenant le flux le plus ramassé de la journée
-      val moyenne_categorie_for_a_codeImmat = df_withTypeFlux.select("type_flux","code_immat").where(col("code_immat")===lit(row.getString(0))).groupBy("type_flux","code_immat").count().orderBy(desc("count")).take(1).head(0).toString()
-      df_withTypeFlux = df_withTypeFlux.withColumn("categorie_recipient_moyen",when(df_withTypeFlux("code_immat")===lit(row.getString(0)),moyenne_categorie_for_a_codeImmat))
-    })
-    log("test PR UDF :" + df_categorieRecipientNull_and_CodeImmatNotNull.show())
+    //regroupe les différent type flux par code_immat
+    var df_withTypeFlux_temp = df_withTypeFlux.join(df_categorieRecipientNull_and_CodeImmatNotNull,Seq("code_immat"),"inner")
+      .select("type_flux", "code_immat")
+      .filter(col("type_flux")=!=lit("Inconnu") && col("type_flux")=!=lit("Inconnu_connu"))
+      .groupBy("type_flux", "code_immat").count().orderBy(desc("count"))
+      .withColumnRenamed("type_flux","categorie_recipient_moyen")
+    import org.apache.spark.sql.expressions.Window
+    //Utilisation de l'outil "window" pour garder seulement le type_flux avec le maximum d'occurence par code_immat
+    val windowSpec  = Window.partitionBy( "code_immat")
+    df_withTypeFlux_temp =  df_withTypeFlux_temp.withColumn("max",max("count").over(windowSpec)).where(df_withTypeFlux_temp("count")===col("max"))//.drop("max","count")
+    df_withTypeFlux_temp = df_withTypeFlux.join(df_withTypeFlux_temp,Seq("code_immat"),"left")
     //Update de la colonne de flux
-    val df_withAllTypeFlux = df_withTypeFlux.withColumn("type_flux_temp",Utils.type_flux_UDF("post_flux")(df_withTypeFlux("type_flux"),df_withTypeFlux("code_immat"),df_withTypeFlux("categorie_recipient_moyen"))).drop("type_flux").withColumnRenamed("type_flux_temp","type_flux")
+    var df_withAllTypeFlux = df_withTypeFlux_temp.withColumn("type_flux_temp",Utils.type_flux_UDF("post_flux")(df_withTypeFlux_temp("type_flux"),df_withTypeFlux_temp("code_immat"),df_withTypeFlux_temp("categorie_recipient_moyen"))).drop("type_flux").withColumnRenamed("type_flux_temp","type_flux")
     show(df_withAllTypeFlux,"df_withAllTypeFlux")
+
     //Redressement des pesées en fonction des flux
     val df_poids_corr = df_withAllTypeFlux.withColumn("poids_corr",Utils.redressementUDF()(df_withAllTypeFlux("code_tournee"),df_withAllTypeFlux("poids"),df_withAllTypeFlux("type_flux")))
     show(df_poids_corr,"df_poids_corr")
@@ -124,63 +132,97 @@ object DechetAnalysis {
 
     // ********** Partie gestion des moyennes des flux sur le même mois de l'année précedente **********
 
-    //Map pour le moyennes des pesées à corriger avec bac rattaché
-    val mapMoyenneBacRattache = scala.collection.mutable.Map[String,Double]()
-    //Map pour le moyennes  globales même mois année-1 sans bac rattaché
-    val mapMoyenneSansBacRattache = scala.collection.mutable.Map[String,Double]()
+    // seuil corrospondant au nombre de valeur qu'il doit y avoir pour avoir un historique valide
+    val seuil_historique = 6 // TODO seuil a mettre a 3 pour les tests unitaires
+
     //liste pour calculer les moyennes dynamiques pour les pesées à corriger avec bac rattaché
-    var liste_litrage_flux = Array(("OM140", "Bacs ordures ménagères", ("120-140"), 9.7), ("OM180", "Bacs ordures ménagères", ("180"), 12.4), ("OM240", "Bacs ordures ménagères", ("240"), 17.6),
-    ("OM360", "Bacs ordures ménagères", ("330-340-360"), 27.6), ("OM400", "Bacs ordures ménagères", ("400"), 22), ("OM660", "Bacs ordures ménagères", ("500-660"), 46.4),
-    ("OM770", "Bacs ordures ménagères", ("750-770-1000"), 52.7), ("CS140", "Bacs collecte sélective", ("120-140"), 5.2), ("CS180", "Bacs collecte sélective", ("180"), 6.8),
-    ("CS240", "Bacs collecte sélective", ("240"), 7.6), ("CS360", "Bacs collecte sélective", ("330-340-360"), 10.7), ("CS660", "Bacs collecte sélective", ("500-660"), 21.9),
-    ("CS770", "Bacs collecte sélective", ("750-770-1000"), 24.1), ("BIO140", "Bacs biodéchets", ("120-140"), 34.9), ("BIO240", "Bacs biodéchets", ("240"), 29.1),
-    ("BIO400", "Bacs biodéchets", ("400"), 64.5), ("VE240", "Bacs verre", ("240"), 46.6), ("VE400", "Bacs verre", ("400"), 71.6),
-    ("VE770", "Bacs verre", ("750-770-1000"), 72.1))
-    //liste pour calculer les moyennes globales même mois année-1 sans bac rattaché
-    var liste_flux = Array(("OMglobal", "OM", 17.8), ("CSglobal", "CS", 9.2), ("BIOglobal", "BIO", 53.5), ("VEglobal", "VE", 60.5))
+    var liste_litrage_flux = Seq(
+      Row("OM140", "Bacs ordures ménagères", "120-140", 9.7),
+      Row("OM180", "Bacs ordures ménagères", "180", 12.4),
+      Row("OM240", "Bacs ordures ménagères", "240", 17.6),
+      Row("OM360", "Bacs ordures ménagères", "330-340-360", 27.6),
+      Row("OM400", "Bacs ordures ménagères", "400", 22.0),
+      Row("OM660", "Bacs ordures ménagères", "500-660", 46.4),
+      Row("OM770", "Bacs ordures ménagères", "750-770-1000", 52.7),
+      Row("CS140", "Bacs collecte sélective", "120-140", 5.2),
+      Row("CS180", "Bacs collecte sélective", "180", 6.8),
+      Row("CS240", "Bacs collecte sélective", "240", 7.6),
+      Row("CS360", "Bacs collecte sélective", "330-340-360", 10.7),
+      Row("CS660", "Bacs collecte sélective", "500-660", 21.9),
+      Row("CS770", "Bacs collecte sélective", "750-770-1000", 24.1),
+      Row("BIO140", "Bacs biodéchets", "120-140", 34.9),
+      Row("BIO240", "Bacs biodéchets", "240", 29.1),
+      Row("BIO400", "Bacs biodéchets", "400", 64.5),
+      Row("VE240", "Bacs verre", "240", 46.6),
+      Row("VE400", "Bacs verre", "400", 71.6),
+      Row("VE770", "Bacs verre", "750-770-1000", 72.1))
+    //liste pour calculer les moyennes globales même mois année - 1 sans bac rattaché
+    var liste_flux = Seq(
+      Row ("OMglobal", "OM", 17.8),
+      Row ("CSglobal", "CS", 9.2),
+      Row ("BIOglobal", "BIO", 53.5),
+      Row ("VEglobal", "VE", 60.5))
+
     val df_join = broadcast(df_support).join(df_refBac,Seq("id_bac"),"left")
     show(df_refBac,"df_refBac")
     show(df_join,"df_join")
+
+    import spark.sqlContext.implicits._
+    //Creation du dataframe contenant la liste des donnée qui nous permet de calculer les moyennes
+    val column_liste_litrage_flux = List(
+      StructField("ex_type_flux", StringType, true),
+      StructField("categorie", StringType, true),
+      StructField("ex_litrage_recipient", StringType, true),
+      StructField("moyenne_redressement", DoubleType, true)
+    )
+    val liste_litrage_fluxToDf = spark.createDataFrame(spark.sparkContext.parallelize(liste_litrage_flux),
+      StructType(column_liste_litrage_flux)
+    )
+    show(liste_litrage_fluxToDf,"liste_litrage_fluxToDf")
     //calcul des moyennes pour les pesé avec bac rattaché et pour chaque type de récipient
-    for (flux_lit <- liste_litrage_flux) {
-      var df_moyenne = df_join.filter(
-        date_format(df_join("date_mesure"),"yyyy-MM")===lit(dateRef) &&
-          df_join("poids")>0 && df_join("poids")<250 &&
-          df_join("categorie_recipient")===lit(flux_lit._2) &&
-          df_join("litrage_recipient").isin(flux_lit._3.split("-"):_*)
-      )
-      val moyenne = df_moyenne.groupBy("categorie_recipient").agg(count("*") as "count",avg("poids").as("moyenne_poids")).filter(col("count")>=1) //TODO le "1" a remplacer par 50 après la démo
-      var moyenne_value =flux_lit._4.toString.toDouble
-      if (!moyenne.isEmpty){
-        moyenne_value = moyenne.take(1).head(2).toString().toDouble
-        mapMoyenneBacRattache.put(flux_lit._1,moyenne_value)
-      }else {
-        mapMoyenneBacRattache.put(flux_lit._1,moyenne_value)
-      }
-    }
+    var df_join_litrage_flux = df_join.join(broadcast(liste_litrage_fluxToDf),col("categorie_recipient")===col("categorie"),"left")
+      .select("ex_type_flux","categorie","ex_litrage_recipient","moyenne_redressement","categorie_recipient","poids","poids_corr","date_mesure","litrage_recipient")
+    var df_moyenne_litrage_flux = df_join_litrage_flux.filter(
+      date_format(col("date_mesure"), "yyyy-MM") === lit(dateRef) &&
+        col("poids") > 0 && df_join("poids") < 250 &&
+        col("ex_litrage_recipient").contains(col("litrage_recipient")))
+    val moyenne_litrage_flux = df_moyenne_litrage_flux.groupBy("ex_type_flux").agg(count("*") as "count",avg("poids").as("moyenne_poids")).filter(col("count")>50)  // TODO changer le 1 en 50 si plus en phase de test
+    val df_map_litrage_flux = liste_litrage_fluxToDf.join(broadcast(moyenne_litrage_flux),Seq("ex_type_flux"),"left")
+      .withColumn("moyenne_poids",when(col("moyenne_poids").isNull,col("moyenne_redressement")).otherwise(col("moyenne_poids"))).select("ex_type_flux","moyenne_poids")
+    //Map pour le moyennes des pesées à corriger avec bac rattaché
+    val mapMoyenneBacRattache = df_map_litrage_flux.rdd.map(row => (row.getString(0) -> row.getDouble(1))).collectAsMap()
     log("mapMoyenneBacRattache : " + mapMoyenneBacRattache.mkString(" - "))
+
+    //Creation du dataframe contenant la liste des donnée qui nous permet de calculer les moyennes
+    val column_liste_flux = List(
+      StructField("ex_type_flux", StringType, true),
+      StructField("ex_type", StringType, true),
+      StructField("moyenne_redressement", DoubleType, true)
+    )
+    val liste_fluxToDf = spark.createDataFrame(spark.sparkContext.parallelize(liste_flux),
+      StructType(column_liste_flux)
+    )
+    show(liste_fluxToDf, "liste_fluxToDf")
     //calcul des moyennes pour les pesé avec bac non rattaché et pour chaque type de récipient
-    for (flux_global <- liste_flux) {
-      val moyenne = df_support.filter(date_format(df_support("date_mesure"),"yyyy-MM")===lit(dateRef) &&
-        df_support("poids")>0 && df_support("poids")<250 &&
-        df_support("code_tournee").contains(flux_global._2)
-      ).groupBy("code_tournee").agg(avg("poids").as("moyenne_poids"))
-      var moyenne_value =flux_global._3.toString.toDouble
-      if (!moyenne.isEmpty){
-        moyenne_value = moyenne.take(1).head(1).toString().toDouble
-        mapMoyenneSansBacRattache.put(flux_global._1,moyenne_value)
-      }else {
-        mapMoyenneSansBacRattache.put(flux_global._1,moyenne_value)
-      }
-    }
+    val df_support_type = df_support.withColumn("type",split(col("code_tournee"),"-").getItem(2))
+    val df_join_flux = liste_fluxToDf.join(broadcast(df_support_type),liste_fluxToDf("ex_type")===df_support_type("type"),"left")
+    val moyenne_flux = df_join_flux.filter(date_format(col("date_mesure"), "yyyy-MM") === lit(dateRef) &&
+      col("poids") > 0 && col("poids") < 250
+    ).groupBy("ex_type_flux").agg(avg("poids").as("moyenne_poids"))
+
+    val df_map_flux = liste_fluxToDf.join(broadcast(moyenne_flux),Seq("ex_type_flux"),"left")
+      .withColumn("moyenne_poids",when(col("moyenne_poids").isNull,col("moyenne_redressement")).otherwise(col("moyenne_poids"))).select("ex_type_flux","moyenne_poids")
+    //Map pour les moyennes  globales même mois année-1 sans bac rattaché
+    val mapMoyenneSansBacRattache = df_map_flux.rdd.map(row => (row.getString(0) -> row.getDouble(1))).collectAsMap()
     log("mapMoyenneSansBacRattache : " + mapMoyenneSansBacRattache.mkString(" - "))
-    //Calcul moyenne des flux Inconnu et Autres
+
+    //Calcul des moyennes des flux Inconnu et Autres
     val moyenne = df_support.filter(date_format(df_support("date_mesure"),"yyyy-MM")===lit(dateRef) &&
       df_support("poids")>0 && df_support("poids")<250)
       .agg(avg("poids").as("moyenne_poids"))
     //Variable pour le moyennes  globales même mois année-1 sans bac rattaché
-    val mapMoyenneBacInconnu = moyenne.take(1).head(0).toString().toDouble
-
+    val mapMoyenneBacInconnu = moyenne.take(1).head(0).toString.toDouble
+  log("BacInconnu moyenne :" + mapMoyenneBacInconnu)
     // ********** Partie de la mise en place de la correction du poids
 
     if(!dateRef.contains("2020")){
@@ -190,35 +232,34 @@ object DechetAnalysis {
       connectionProps.setProperty("user", Utils.envVar("POSTGRES_ACCESS_KEY"))
       connectionProps.setProperty("password", Utils.envVar("POSTGRES_SECRET_KEY"))
       // on selectionne les x dernière valeurs reçus de chaque id_bac ayant pour poids_corr le poids
-      val req ="""
-                 |select * from (
-                 |    select id_bac,
-                 |           poids,
-                 |           poids_corr,
-                 |		        date_mesure,
-                 |           row_number() over (partition by id_bac order by date_mesure desc) as history_value
-                 |    from dwh.fac_dechets where poids=poids_corr) ranks
-                 |where history_value <= 3
-                 |""".stripMargin
+      val req =s"""
+                  |select * from (
+                  |    select id_bac,
+                  |           poids,
+                  |           poids_corr,
+                  |		        date_mesure,
+                  |           row_number() over (partition by id_bac order by date_mesure desc) as history_value
+                  |    from dwh.fac_dechets where date_mesure <= '$date') ranks
+                  |where  poids=poids_corr and history_value <= $seuil_historique
+                  |""".stripMargin
       val df_history = spark.read.jdbc(url, s"($req) as temp", connectionProps)
       show(df_history,"df_history")
-
       //dataframe avec tout les id_bac qui ont 6 valeurs historisé dont on peut se servir pour corriger
-      val df_correction_valide = df_history.groupBy("id_bac").agg(avg("poids") as "avg",count("poids") as "count").filter("count==3").drop("count")
+      val df_correction_valide = df_history.groupBy("id_bac").agg(avg("poids") as "avg",count("poids") as "count").filter(s"count==$seuil_historique").drop("count")
       show(df_correction_valide,"df_countdf_count_valide")
-
       //dataframe avec tout les id_bac qui n'ont pas 6 valeurs historisé pour corriger
-      val df_correction_invalide = df_history.groupBy("id_bac").count().filter("count<3").drop("count")
+      val df_correction_invalide = df_history.groupBy("id_bac").count().filter(s"count<$seuil_historique").drop("count")
       show(df_correction_invalide,"df_count_non_valide")
       //jointure entre les données a corriger de la journée et le référentiel pour les collecte dechets qui sont rattaché a des bacs
-      var df_correction = df_a_redresser.where(date_format(col("date_crea"),"yyyy-MM-dd")===lit(date)).join(df_refBac,Seq("id_bac"),"left") // JOINTURE pour récupérer les dechet qui sont avec des bacs
+      var df_correction = df_a_redresser.where(concat_ws("-",col("year"),col("month"),col("day"))===lit(date)).join(df_refBac,Seq("id_bac"),"left") // JOINTURE pour récupérer les dechet qui sont avec des bacs
         .drop(df_refBac("code_puce")).drop(df_refBac("year")).drop(df_refBac("month")).drop(df_refBac("day")).drop(df_refBac("date_modif")).drop(df_refBac("date_crea")) // drop des colonnes en trop dû a la jointure
+      show(df_a_redresser,"df_a_redresser")
       df_correction = df_correction.join(df_correction_valide,Seq("id_bac"),"left")
-      df_correction = df_correction.withColumn("poids_corr",when(col("poids")===lit("0.0"),col("avg")).otherwise(col("poids_corr"))).drop("avg")
+      df_correction = df_correction.withColumn("poids_corr",when(col("poids_corr")===lit("0.0") || col("poids_corr")===lit("0"),col("avg")).otherwise(col("poids_corr"))).drop("avg").withColumn("litrage_recipient",col("litrage_recipient").cast(StringType))
       show(df_correction,"df_correction")
+
       //dataframe avec le poids corrigé pour certains id_bacs (id_bac avec moins de 6 valeurs historisé
-      show(df_correction.join(df_correction_invalide,Seq("id_bac"),"left"),"test jointure")
-      val df_correction_non_valide = df_correction.join(df_correction_invalide,Seq("id_bac"),"left").withColumn("poids_corr",Utils.redressementCorrectionInvalideUDF(mapMoyenneBacRattache,mapMoyenneSansBacRattache,mapMoyenneBacInconnu)(df_correction("type_flux"),df_correction("litrage_recipient"),df_correction("poids_corr")))
+      val df_correction_non_valide = df_correction.join(df_correction_invalide,Seq("id_bac"),"left").withColumn("poids_corr",Utils.redressementCorrectionInvalideUDF(mapMoyenneBacRattache,mapMoyenneSansBacRattache,mapMoyenneBacInconnu)(col("type_flux"),col("litrage_recipient"),col("poids_corr")))
       show(df_correction_non_valide,"df_correction_non_valide")
       val df_final = df_correction_non_valide.select("date_mesure","code_puce","id_bac","code_tournee","code_immat","poids","poids_corr","latitude","longitude","date_crea","date_modif","year","month","day")
       show(df_final,"df_final")

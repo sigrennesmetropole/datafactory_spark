@@ -33,7 +33,7 @@ class DechetAnalysisTest {
         StructField("Bouton_poussoir_5", DoubleType, true),
         StructField("Bouton_poussoir_6", DoubleType, true),
         StructField("Statut_du_bac", StringType, true),
-        StructField("Immatriculation ", StringType, true),
+        StructField("Immatriculation", StringType, true),
         StructField("Tournee", StringType, true)
       )
     )

@@ -51,6 +51,7 @@ object ExecuteDechetPreparation {
       .hadoopConfiguration
       .set("fs.s3.aws.credentials.provider", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
     val nameEnv = "tableCollecte"
+    var exception = ""
     try {
       val df_ImportDechet = ImportDechet.ExecuteImportDechet(spark, SYSDATE,nameEnv)
       println("IMPORT DECHET")
@@ -65,7 +66,14 @@ object ExecuteDechetPreparation {
         println("Aucune donnee importe, skip du traitement...")
       }
 
-      
+      if (df_PreparationDechet.head(1).isEmpty) {
+        exception = exception + "Pas de données collecte préparé a écrire dans minio, arrêt de la chaine de traitement... \n"
+      }
+      logger.error("exception :" + exception)
+      if (exception != "" && Utils.envVar("TEST_MODE") == "False") {
+        throw new Exception(exception)
+      }
+
       if (Utils.envVar("TEST_MODE") == "False" && (!df_PreparationDechet.head(1).isEmpty)) {
         Left(Utils.writeToS3(spark,df_PreparationDechet,nameEnv,csv,SYSDATE))
       }
