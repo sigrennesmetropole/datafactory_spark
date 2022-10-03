@@ -1,9 +1,9 @@
 package fr.rennesmetropole.app
 
-import com.typesafe.scalalogging.Logger
-import fr.rennesmetropole.services.{ImportLora, LoraAnalysis}
+import com.typesafe.config.ConfigFactory
+import fr.rennesmetropole.services.{ImportTrameLora, LoraAnalysis}
 import fr.rennesmetropole.tools.Utils
-import fr.rennesmetropole.tools.Utils.date2URL
+import fr.rennesmetropole.tools.Utils.{config, date2URL, getClass, log, show}
 import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions.{col, from_json, monotonically_increasing_id}
@@ -12,10 +12,13 @@ import org.apache.spark.sql.types._
 import java.time.{Duration, Instant}
 import scala.collection.JavaConverters._
 import scala.util.control.Breaks.{break, breakable}
+import org.apache.logging.log4j.LogManager
 
 object ExecuteLoraAnalysis {
+  val logger = LogManager.getLogger(getClass.getName)
+  var config = ConfigFactory.load()
   def main(args: Array[String]): Either[Unit, DataFrame] = {
-    val logger = Logger(getClass.getName)
+
 
     /** SYSDATE recupère la date actuelle de l'horloge système dans le fuseau horaire par défaut (UTC) */
     var SYSDATE = java.time.LocalDate.now.toString
@@ -38,6 +41,7 @@ object ExecuteLoraAnalysis {
       .config("spark.sql.caseSensitive", "true")
       .getOrCreate()
 
+    log("ExecuteLoraAnalysis")
     /** Chargement des paramètres Hadoop à partir des propriétés système */
     spark.sparkContext
       .hadoopConfiguration
@@ -70,7 +74,7 @@ object ExecuteLoraAnalysis {
       new Path(path).getFileSystem(conf).listStatus(new Path(path)).filter(_.isDirectory).map(_.getPath)
         .foreach(result => {
           val deveui = result.getName
-          val df_ImportLora = ImportLora.ExecuteImportLora(spark, SYSDATE, deveui)
+          val df_ImportLora = ImportTrameLora.ExecuteImportLora(spark, SYSDATE, deveui)
           if (listDeveui.contains(deveui)) {
             val schema = StructType(
               List(
@@ -99,10 +103,9 @@ object ExecuteLoraAnalysis {
                   if (!df_LoraAnalyzed.head(1).isEmpty) {
                     /** Retourne le dataframe après enrichissement */
                     val df_LoraEnrichi = LoraAnalysis.enrichissement_Basique(spark, df_LoraAnalyzed)
-                    println("-- df pre postgres --")
-                    df_LoraEnrichi.show(false)
-
                     partitionedDf = Utils.dfToPartitionedDf(df_LoraEnrichi, SYSDATE)
+                    println("-- df pre postgres --")
+                    partitionedDf.show(false)
                   } else {
                     println("Aucune données après l'analyse, peut être que le référentiel est incomplet...")
                   }

@@ -37,3 +37,4 @@ COPY --from=build-dechets /workspace-dechets/dechet-preparation/target/rm-dechet
 COPY --from=build-dechets /workspace-dechets/dechet-analysis/target/rm-dechet-analysis-*.jar /app-dechet/dechet-analysis/target/rm-dechet-analysis.jar
 
 WORKDIR /opt/bitnami/spark/
+RUN mkdir /tmp/spark-events

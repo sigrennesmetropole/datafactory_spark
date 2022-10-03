@@ -1,6 +1,7 @@
 package fr.rennesmetropole.tools
 
-import com.typesafe.scalalogging.Logger
+import fr.rennesmetropole.tools.Utils.getClass
+import org.apache.logging.log4j.LogManager
 import org.apache.spark.sql._
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
@@ -8,7 +9,7 @@ import org.apache.spark.sql.types._
 import scala.collection.mutable.WrappedArray
 
 object Traitements {
-  val logger = Logger(getClass.getName)
+  val logger = LogManager.getLogger(getClass.getName)
 
   val schema = StructType(
     List(
@@ -16,19 +17,22 @@ object Traitements {
       StructField("deveui", StringType, false),
       StructField("timestamp", StringType, false),
       StructField("name", StringType, false),
-      StructField("value", FloatType)
+      StructField("value", FloatType),
+      StructField("year", StringType, false),
+      StructField("month", StringType, false),
+      StructField("day", StringType, false)
     )
   )
 
 
   def flattenDataFrame(raw_df: DataFrame, columns: Seq[String]): DataFrame = {
-    //Création de la liste qui va servir pour renommer les colonnes
+    //Création de la liste qui va servir pour renommer les colonne
     var nouveauxNom = flattenSchema(raw_df.schema).mkString(",").replace(".","_").split(",") // On remplace les '.' par des '-' sinon cela va poser problème lors du renommage
     var flatten_df = raw_df.select(flattenSchema(raw_df.schema):_*) //permet de selectionner que les valeurs a la fin des chemins
     val df = flatten_df.toDF(nouveauxNom:_*)
     println("SCHEMA APRES RENOMMAGE")
     //df.printSchema()
-    val allColumns = Seq("deveui","timestamp")++columns
+    val allColumns = Seq("deveui","timestamp","year","month","day")++columns
     println(allColumns.mkString("-"))
     val selectColumn = allColumns.intersect(df.columns)
     val df2 = df.select(selectColumn.head, selectColumn.tail:_*) // car select accepte select(col: String, cols: String*): DataFrame, ou select(cols: Column*): DataFrame donc on ne peut pas mettre juste 'columns:_*'
@@ -81,9 +85,16 @@ object Traitements {
     println("Traitement du capteur : " + deveui)
     if (!df.head(1).isEmpty && !param(7).isEmpty ) {
       println("DataFrame non vide, commencement du traitement...")
-      val df_data = df.select( col("deveui"),col("timestamp"), col("data.*"))
-      val flat = flattenDataFrame(df_data,param(7))
-      return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6), df_step.filter(col("deveui") === deveui))
+      if(!df.columns.contains("year")){
+        val df_data = df.select( col("deveui"),col("timestamp"), col("data.*")).withColumn("year",lit(null)).withColumn("month",lit(null)).withColumn("day",lit(null))
+        val flat = flattenDataFrame(df_data,param(7))
+        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6), df_step)
+      }else {
+        val df_data = df.select( col("deveui"),col("timestamp"),col("year"),col("month"),col("day"), col("data.*"))
+        val flat = flattenDataFrame(df_data,param(7))
+        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6), df_step)
+      }
+
     }
     else {
       println("DataFrame vide, aucune donnee, skip du traitement Adeunis_RF_Lorawan_Temp...")
@@ -121,7 +132,7 @@ object Traitements {
         })
         df_regroup = tmp_df.withColumn("values", array(selectedColumn.head, selectedColumn.tail: _*))
       }
-
+      
     }else if(!nom_donnee_cle.isEmpty && nom_donnee_valeur.isEmpty){
       //TODO
 
@@ -189,20 +200,19 @@ object Traitements {
     var df_clean = df_AllNameFinal
     //On vérifie si la colonne values est un array, si oui on extrait sa valeur pour avoir juste la valeur
     if(df_AllNameFinal.schema("values").dataType.isInstanceOf[ArrayType]){
-      df_clean = df_AllNameFinal.select(col("deveui"), col("timestamp"), col("name"), col("values").getItem(0) as "value")
+      df_clean = df_AllNameFinal.select(col("deveui"), col("timestamp"), col("name"), col("values").getItem(0) as "value",col("year"),col("month"),col("day"))
     }else {df_clean = df_AllNameFinal.withColumnRenamed("values","value")}
     //On ajoute la date d'insertion dans une nouvelle colonne
     val date = java.time.OffsetDateTime.now().toString
     println("DATE INSERTED: " + date)
     val df_withDate = df_clean.withColumn("insertedDate", lit(date))
-
     //On fini par ajouter la colonne id qui va servir de clé primaire
     val df_withId = df_withDate.withColumn("id", concat_ws(" | ", col("deveui"), col("timestamp"), col("name")))
 
     val onlyValue = (str:Any) =>{extractNumberFromString(str) }
     val udfValue = udf(onlyValue)
     val df_nullfiltered = df_withId.filter(col("value").isNotNull)
-    val df_final = df_nullfiltered.select(col("deveui"),col("timestamp"),col("name"),udfValue(col("value")) as "value",col("insertedDate"),col("id")).withColumnRenamed("timestamp","tramedate") //L'UDF permet de ne prendre que la valeur (le nombre) et pas l'unité si elle est présente
+    val df_final = df_nullfiltered.select(col("deveui"),col("timestamp"),col("name"),udfValue(col("value")) as "value",col("insertedDate"),col("year"),col("month"),col("day"),col("id")).withColumnRenamed("timestamp","tramedate") //L'UDF permet de ne prendre que la valeur (le nombre) et pas l'unité si elle est présente
     println("-- df traitement_general--")
     df_final.show(10, false)
 
