@@ -95,13 +95,13 @@
     </dependency>
   </dependencies>
   <properties>
-    <scala.version>2.12.15</scala.version>
-    <application.name>rm-lora-analysis</application.name>
     <scala.binary.version>2.12</scala.binary.version>
+    <maven.compiler.target>1.8</maven.compiler.target>
+    <spark.version>3.3.0</spark.version>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <scala.version>2.12.15</scala.version>
     <encoding>UTF-8</encoding>
     <hadoop.version>3.3.2</hadoop.version>
-    <maven.compiler.source>1.8</maven.compiler.source>
-    <spark.version>3.3.0</spark.version>
-    <maven.compiler.target>1.8</maven.compiler.target>
+    <application.name>rm-lora-analysis</application.name>
   </properties>
 </project>

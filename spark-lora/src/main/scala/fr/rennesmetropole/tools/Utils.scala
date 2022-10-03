@@ -317,17 +317,19 @@ log("Update termine")
 
       case "2" =>
         if (desc != null) {
-          log (desc)
+          log(desc)
         }
-        df.show (20,false)
+        df.show(20, false)
 
       case "3" =>
         if (desc != null) {
-          log (desc)
+          log(desc)
         }
-        df.show (100000000,false)
+        df.show(100000000, false)
       case _ =>
-        }
+    }
+
+  }
 
   def historicalTimestamp(valeur: String, index: Integer, pas: Integer): String = {
     val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")

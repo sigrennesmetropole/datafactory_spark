@@ -74,7 +74,7 @@ object ExecuteLoraAnalysis {
       new Path(path).getFileSystem(conf).listStatus(new Path(path)).filter(_.isDirectory).map(_.getPath)
         .foreach(result => {
           val deveui = result.getName
-          val df_ImportLora = ImportLora.ExecuteImportLora(spark, SYSDATE, deveui)
+          val df_ImportLora = ImportTrameLora.ExecuteImportLora(spark, SYSDATE, deveui)
           if (listDeveui.contains(deveui)) {
             val schema = StructType(
               List(

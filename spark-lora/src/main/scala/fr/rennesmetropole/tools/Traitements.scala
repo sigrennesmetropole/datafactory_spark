@@ -88,11 +88,11 @@ object Traitements {
       if(!df.columns.contains("year")){
         val df_data = df.select( col("deveui"),col("timestamp"), col("data.*")).withColumn("year",lit(null)).withColumn("month",lit(null)).withColumn("day",lit(null))
         val flat = flattenDataFrame(df_data,param(7))
-        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6))
+        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6), df_step)
       }else {
         val df_data = df.select( col("deveui"),col("timestamp"),col("year"),col("month"),col("day"), col("data.*"))
         val flat = flattenDataFrame(df_data,param(7))
-        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6))
+        return traitement_general(spark,flat,param(0),param(1),param(2),param(3),param(4),param(5),param(6), df_step)
       }
 
     }

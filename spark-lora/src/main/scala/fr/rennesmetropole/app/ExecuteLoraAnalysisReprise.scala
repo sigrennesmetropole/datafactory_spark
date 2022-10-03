@@ -60,7 +60,7 @@ object ExecuteLoraAnalysisReprise {
       var allSucces = true
       var listDeveuiEchec: Seq[String] = Seq()
       val df_sensor = LoraAnalysisReprise.getSensor(spark)
-
+      val df_step = Utils.readFomPostgres(spark,Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_MESURE_INFORMATION_NAME")).select("deveui", "dataparameter", "step")
       show(df_sensor,"df_sensor")
       val df_a_reprendre = LoraAnalysisReprise.capteurAReprendre(df_sensor)
       show(df_a_reprendre,"df_a_reprendre")
@@ -87,9 +87,8 @@ object ExecuteLoraAnalysisReprise {
                   seq_ImportLora = seq_ImportLora :+  Utils.dfToPrePartitionedDf_Reprise(df_temp, date)
                 }
               })
-          
 
-var df_ImportLora = seq_ImportLora.reduce((x1,y1) => x1.unionByName(y1, allowMissingColumns = true))
+              var df_ImportLora = seq_ImportLora.reduce((x1,y1) => x1.unionByName(y1, allowMissingColumns = true))
 
               val schema = StructType(
                 List(
@@ -113,7 +112,7 @@ var df_ImportLora = seq_ImportLora.reduce((x1,y1) => x1.unionByName(y1, allowMis
 
                   if (!df_ImportLora.head(1).isEmpty) {
                     /** Retourne le dataframe après analyse */
-                    val df_LoraAnalyzed = LoraAnalysis.ExecuteLoraAnalysis(spark, df_ImportLora, deveui)
+                    val df_LoraAnalyzed = LoraAnalysis.ExecuteLoraAnalysis(spark, df_ImportLora, deveui, df_step)
                     if (!df_LoraAnalyzed.head(1).isEmpty) {
                       /** Retourne le dataframe après enrichissement */
                       val df_LoraEnrichi = LoraAnalysis.enrichissement_Basique(spark, df_LoraAnalyzed)
