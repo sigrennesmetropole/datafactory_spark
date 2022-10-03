@@ -66,6 +66,7 @@ object ExecuteLoraAnalysis {
       var allSucces = true
       var listDeveuiEchec: Seq[String] = Seq()
       val df_sensor = Utils.readFomPostgres(spark,Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_SENSOR_NAME"))
+      val df_step = Utils.readFomPostgres(spark,Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_MESURE_INFORMATION_NAME")).select("deveui", "dataparameter", "step")
       var listDeveui = Set[String]()
       for (r <- df_sensor.rdd.collect) {
         listDeveui += r.getAs("deveui")
@@ -73,25 +74,7 @@ object ExecuteLoraAnalysis {
       new Path(path).getFileSystem(conf).listStatus(new Path(path)).filter(_.isDirectory).map(_.getPath)
         .foreach(result => {
           val deveui = result.getName
-          val df_ImportLora = ImportTrameLora.ExecuteImportLora(spark, SYSDATE, deveui)
-/*          try {
-            if (!df_ImportLora.head(1).isEmpty) {
-              val jsondf = df_ImportLora.toJSON
-              var brutData = jsondf.withColumn("values", from_json(col("value"), df_ImportLora.schema, Map[String, String]().asJava))
-              brutData = brutData.withColumn("timestamp", col("values.timestamp").cast(TimestampType))
-                .withColumn("deveui", col("values.deveui"))
-                .withColumn("id", monotonically_increasing_id())
-                .drop("values")
-              var partitionedBrutDf = Utils.dfToPartitionedDf(brutData, SYSDATE)
-              partitionedBrutDf = partitionedBrutDf.drop("technical_key")
-              Utils.postgresPersist(spark, Utils.envVar("POSTGRES_URL"), partitionedBrutDf,
-                Utils.envVar("POSTGRES_TABLE_LORA_BRUT_NAME"), SYSDATE, deveui)
-            }
-          } catch {
-            case _ => {
-              println("Echec de l'insertion des données brutes pour le capteur " + deveui)
-            }
-          }*/
+          val df_ImportLora = ImportLora.ExecuteImportLora(spark, SYSDATE, deveui)
           if (listDeveui.contains(deveui)) {
             val schema = StructType(
               List(
@@ -115,7 +98,7 @@ object ExecuteLoraAnalysis {
 
                 if (!df_ImportLora.head(1).isEmpty) {
                   /** Retourne le dataframe après analyse */
-                  val df_LoraAnalyzed = LoraAnalysis.ExecuteLoraAnalysis(spark, df_ImportLora, deveui)
+                  val df_LoraAnalyzed = LoraAnalysis.ExecuteLoraAnalysis(spark, df_ImportLora, deveui, df_step)
 
                   if (!df_LoraAnalyzed.head(1).isEmpty) {
                     /** Retourne le dataframe après enrichissement */

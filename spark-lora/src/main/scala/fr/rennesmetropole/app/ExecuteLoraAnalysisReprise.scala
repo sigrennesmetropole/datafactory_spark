@@ -70,7 +70,8 @@ object ExecuteLoraAnalysisReprise {
           listDeveui += r.getAs("deveui")
         }
         val map = df_a_reprendre.rdd.map(row =>{
-          row.get(0)->(if(row.get(2)==null) LoraAnalysisReprise.getDateBetween(row.get(1).toString,SYSDATE) else LoraAnalysisReprise.getDateBetween(row.get(1).toString,row.get(2).toString))
+          //map : deveui -> liste("date debut","yyyy-mm-dd","yyyy-mm-dd",...,"date fin")
+          row.get(0)->(if(row.get(2)==null) LoraAnalysisReprise.getDateBetween(row.get(1).toString,SYSDATE) else LoraAnalysisReprise.getDateBetween(row.get(1).toString,row.get(2).toString)) 
 
         }).collectAsMap()
         log(map.mkString(" \n"))
@@ -79,15 +80,16 @@ object ExecuteLoraAnalysisReprise {
           println("NAME :" + deveui)
 
             if (listDeveui.contains(deveui)) {
-
-              var df_ImportLora = spark.emptyDataFrame
+              var seq_ImportLora = Seq[DataFrame]()
               result._2.foreach(date => {
                 val df_temp = ImportTrameLora.ExecuteImportLora(spark, date, deveui)
                 if(!df_temp.head(1).isEmpty) {
-                  df_ImportLora = df_ImportLora.unionByName(df_temp, allowMissingColumns = true)
-                  df_ImportLora = Utils.dfToPrePartitionedDf_Reprise(df_ImportLora, date)
+                  seq_ImportLora = seq_ImportLora :+  Utils.dfToPrePartitionedDf_Reprise(df_temp, date)
                 }
               })
+          
+
+var df_ImportLora = seq_ImportLora.reduce((x1,y1) => x1.unionByName(y1, allowMissingColumns = true))
 
               val schema = StructType(
                 List(

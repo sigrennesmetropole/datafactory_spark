@@ -3,10 +3,12 @@ package fr.rennesmetropole.tools
 import com.typesafe.config.ConfigFactory
 import org.apache.commons.lang3.StringUtils
 import org.apache.spark.sql._
+import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.types._
 
 import java.sql.{Connection, DriverManager, SQLException}
+import java.time.ZonedDateTime
 import java.util.Properties
 import org.apache.logging.log4j.{Level, LogManager}
 import org.apache.spark.sql.expressions.UserDefinedFunction
@@ -58,7 +60,8 @@ object Utils {
       URL + postURL + deveui +"/"
     }
     try {
-      spark.read.option("multiline", "true").json(path)
+      spark.read.option("multiline", "true")
+        .format("org.apache.spark.sql.execution.datasources.json.JsonFileFormat").load(path)
     } catch {
       case e: Throwable => {
         println("ERROR URL : " + path + "  does not exist, your date may be not correct " + e)
@@ -106,12 +109,12 @@ object Utils {
     dfToWrite.write.mode(SaveMode.Append).jdbc(pgUrl, pgTable, connectionProps)
   }
 
-      /** 
+      /**
     * Supprime la partition par rapport à la table et la date en entrée
     * @param table_name : Nom de la table
     * @param pgUrl      : l'url de postgresql
-    * @param DATE       : date sous forme  yyyy-mm-dd 
-    * @return 
+    * @param DATE       : date sous forme  yyyy-mm-dd
+    * @return
     */
   def delete_partition(table_name:String, pgUrl: String, DATE:String, deveui:String){
    log("delete_partition")
@@ -141,7 +144,7 @@ object Utils {
     finally{
       connObj.close();
     }
-  
+
   }
 
   def postgresPersist_Reprise(spark: SparkSession, pgUrl: String, dfToWrite: DataFrame, pgTable: String, DATE_debut: String,DATE_fin: String, deveui: String): Unit = {
@@ -254,12 +257,12 @@ log("Update termine")
     var map = Map[String,Array[Seq[String]]]()
     println("GET PARAM")
     df.show(10,false)
-    for (r <- df.rdd.collect) {   
-      // une row r se peu se presenter comme ceci : 
+    for (r <- df.rdd.collect) {
+      // une row r se peu se presenter comme ceci :
       //  exemple : 70b3d5e75e003dcd-WrappedArray(PTCOUR1)-WrappedArray(PTCOUR1)-WrappedArray(EAP_s, EAP_i)-WrappedArray()-WrappedArray()-WrappedArray(EAP_s, EAP_i)-WrappedArray()
-      //Il faut donc enlever tout les WrappedArray(...) et les espaces en trop mis après les ',' 
+      //Il faut donc enlever tout les WrappedArray(...) et les espaces en trop mis après les ','
       var row = r.mkString("-").replace("WrappedArray","").replace(", ",",").replace("(","").replace(")","").split("-",-1) // -1 pour eviter que le split supprime les valeurs empty en fin de tableau
-      
+
       val seq1 = row(1).split(",").toSeq.filter(_.nonEmpty)
       val seq2 = row(2).split(",").toSeq.filter(_.nonEmpty)
       val seq3 = row(3).split(",").toSeq.filter(_.nonEmpty)
@@ -284,7 +287,7 @@ log("Update termine")
     val arrayDate = DATE.split("-")
     val df2 = df.withColumn("year",lit(arrayDate(0))).withColumn("month",lit(arrayDate(1))).withColumn("day",lit(arrayDate(2)))
     df2.withColumn("technical_key", concat_ws("_", col("id"), col("year"), col("month"), col("day")))
-  
+
   }
   def dfToPrePartitionedDf_Reprise(df : DataFrame, DATE :String) : DataFrame = {
     val arrayDate = DATE.split("-")
@@ -325,6 +328,15 @@ log("Update termine")
         df.show (100000000,false)
       case _ =>
         }
+
+  def historicalTimestamp(valeur: String, index: Integer, pas: Integer): String = {
+    val formatter = java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX")
+    ZonedDateTime.parse(valeur,formatter).minusSeconds(pas*index).format(formatter)
+  }
+
+  def historicalTimestampUDF(): UserDefinedFunction = {
+    val historical = (valeur: String, index: Integer, pas: Integer) =>{Utils.historicalTimestamp(valeur, index, pas) }
+    udf(historical)
 
   }
 }

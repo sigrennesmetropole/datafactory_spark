@@ -1,13 +1,6 @@
 package fr.rennesmetropole.tools
 
 import org.apache.spark.sql.SparkSession
-import org.junit.Assert._
-import org.junit.Test
-import org.scalatest.Assertions._
-import org.apache.spark.sql.types._
-import com.typesafe.config.ConfigFactory
-import org.apache.spark.sql.functions._
-import fr.rennesmetropole.tools.Traitements
 
 class TraitementsTest {
   val spark: SparkSession = SparkSession.builder()

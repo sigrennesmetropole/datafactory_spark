@@ -32,8 +32,8 @@ class LoraAnalysisTest {
   @Test
   def ExecuteLoraAnalysisTest(): Unit = {
     var dfInput = spark.read.json("src/test/resources/Local/services/ExecuteLoraAnalysisInput/")
-    var dfOutput = LoraAnalysis.ExecuteLoraAnalysis(spark, dfInput,"0018b21000002f1e")
-      .unionByName(LoraAnalysis.ExecuteLoraAnalysis(spark, dfInput,"70b3d5e75e003dcd"))
+    var dfOutput = LoraAnalysis.ExecuteLoraAnalysis(spark, dfInput,"0018b21000002f1e", null)
+      .unionByName(LoraAnalysis.ExecuteLoraAnalysis(spark, dfInput,"70b3d5e75e003dcd", null))
 
     val schemaExpected = StructType(
       List(
