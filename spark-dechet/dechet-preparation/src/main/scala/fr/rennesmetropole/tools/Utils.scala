@@ -295,8 +295,8 @@
   }
 
   def writeToS3(spark: SparkSession, df_toWrite: DataFrame,nameEnv:String,csv: String, DATE: String): Unit = {
-    println("Write to s3 to " + Utils.tableVar(nameEnv,"out_bucket") + postURL)
     val postURL = date2URL(DATE)
+    println("Write to s3 to " + Utils.tableVar(nameEnv,"out_bucket") + postURL)
 
     df_toWrite   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write.options(Map("header"->"true", "delimiter"->";"))
