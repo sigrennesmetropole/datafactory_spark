@@ -100,19 +100,23 @@ object DechetAnalysis {
   }
   def redressement_donne(df_raw: DataFrame, spark: SparkSession,date:String): DataFrame = {
   // on identifie les type de flux
-    var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_tournee")))
+    var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_tournee"),df_raw("code_immat")))
     show(df_withTypeFlux,"df_withTypeFlux")
 
     //On récupère la liste des code_immat qui n'ont pas de catégorie récipient et pas de code_tourne mais qui sont déductible car code_immat non null
-    var df_categorieRecipientNull_and_CodeImmatNotNull = df_withTypeFlux.select("type_flux","code_immat").where(col("type_flux")===lit("Inconnu_connu")).select("code_immat").distinct()
-    show(df_categorieRecipientNull_and_CodeImmatNotNull,"df_categorieRecipientNull_and_CodeImmatNotNull")
+    var df_codeTourneeNull_and_CodeImmatNotNull = df_withTypeFlux.select("type_flux","code_immat").where(col("type_flux")===lit("Inconnu_connu")).select("code_immat").distinct()
+    show(df_codeTourneeNull_and_CodeImmatNotNull,"df_codeTourneeNull_and_CodeImmatNotNull")
 
     //On récupère les code_immat qui corresponde a des catégorie_recipient null pour determiner le flux le plus probable (flux que le camion a le plus récupéré)
     //regroupe les différent type flux par code_immat
-    var df_withTypeFlux_temp = df_withTypeFlux.join(df_categorieRecipientNull_and_CodeImmatNotNull,Seq("code_immat"),"inner")
-      .select("type_flux", "code_immat")
-      .filter(col("type_flux")=!=lit("Inconnu") && col("type_flux")=!=lit("Inconnu_connu"))
-      .groupBy("type_flux", "code_immat").count().orderBy(desc("count"))
+    var df_withTypeFlux_temp = df_withTypeFlux.join(df_codeTourneeNull_and_CodeImmatNotNull,Seq("code_immat"),"inner")
+      .select("type_flux", "code_immat","code_tournee", "categorie_recipient","date_mesure")
+      .filter(col("type_flux")=!=lit("Inconnu") && col("code_tournee").isNull && col("code_immat").isNotNull)
+    val df_min_max = df_withTypeFlux_temp.groupBy("code_immat").agg(max("date_mesure") as "date_max", min("date_mesure") as "date_min")
+    df_withTypeFlux_temp = df_withTypeFlux_temp.join(df_min_max,Seq("code_immat"),"inner")
+    df_withTypeFlux_temp= df_withTypeFlux_temp.withColumn("type_flux",Utils.type_flux_UDF("intra_flux")(col("type_flux"),col("categorie_recipient"),col("date_mesure"),col("date_min"),col("date_max"))) //On affecte a tout les bac pas rattache un type flux correspondant a son code_immat
+      .filter(col("type_flux")=!=lit("Inconnu"))
+      .groupBy("type_flux", "code_immat","date_max","date_min").count().orderBy(desc("count"))
       .withColumnRenamed("type_flux","categorie_recipient_moyen")
     import org.apache.spark.sql.expressions.Window
     //Utilisation de l'outil "window" pour garder seulement le type_flux avec le maximum d'occurence par code_immat

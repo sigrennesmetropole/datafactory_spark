@@ -584,46 +584,70 @@ def log(msg:Any):Unit ={
   def type_flux_UDF(mode:String): UserDefinedFunction = {
     mode match {
       case "pre_flux" =>
-        val type_flux = (categorie_recipient:String,code_tournee:String) =>{Utils.type_flux(categorie_recipient,code_tournee) }
+        val type_flux = (categorie_recipient:String,code_tournee:String,code_immat:String) =>{Utils.type_flux_pre_flux(categorie_recipient,code_tournee,code_immat) }
+        udf(type_flux)
+      case "intra_flux" =>
+        val type_flux = (type_flux: String, categorie_recipient: String, date_mesure:String, min: String ,max: String) => {Utils.type_flux_intra_flux(type_flux, categorie_recipient,date_mesure, min,max) }
         udf(type_flux)
       case "post_flux" =>
-        val type_flux = (type_flux:String,code_immat:String,categorie_recipient_moyen:String) =>{Utils.type_flux(type_flux,code_immat,categorie_recipient_moyen) }
+        val type_flux = (type_flux:String,code_immat:String,categorie_recipient_moyen:String) =>{Utils.type_flux_post_flux(type_flux,code_immat,categorie_recipient_moyen) }
         udf(type_flux)
     }
   }
 
-  def type_flux(categorie_recipient:String,code_tournee:String):String={
-    (stripAccents(categorie_recipient),code_tournee) match {
-      case (null,null) =>
+  def type_flux_pre_flux(categorie_recipient:String,code_tournee:String,code_immat:String):String={
+    (stripAccents(categorie_recipient),code_tournee,code_immat) match {
+      case (null,null,null) =>
         "Inconnu"
-      case (null,_) =>
-          "Inconnu_connu"
 
-      case (x,_) if x.contains("Bacs ordures menageres") =>
+      case (x,_,_) if x!=null && x.contains("Bacs ordures menageres") =>
         "OM"
-      case (x,_) if x.contains("Bacs collecte selective") =>
+      case (x,_,_) if x!=null && x.contains("Bacs collecte selective") =>
         "CS"
-      case (x,_) if x.contains("Bacs verre") =>
+      case (x,_,_) if x!=null && x.contains("Bacs verre") =>
         "Verre"
-      case (x,_) if x.contains("Bacs biodechets") =>
+      case (x,_,_) if x!=null && x.contains("Bacs biodechets") =>
         "Biodechets"
-      case (_,y) if y!=null && y.endsWith("OM") =>
+      case (_,y,_) if y!=null && y.endsWith("OM") =>
         "OM"
-      case (_,y) if y!=null && y.endsWith("CS") =>
+      case (_,y,_) if y!=null && y.endsWith("CS") =>
         "CS"
-      case (_,y) if y!=null && y.endsWith("VE") =>
+      case (_,y,_) if y!=null && y.endsWith("VE") =>
         "Verre"
-      case (_,y) if y!=null && y.endsWith("BIO") =>
+      case (_,y,_) if y!=null && y.endsWith("BIO") =>
         "Biodechets"
-      case (x,_) if (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs")) =>
+      case (x,_,_) if (x!=null && (x.contains("Bacs carton") || x.contains("Bacs papier") || x.contains("Composteurs"))) =>
         "Autres"
+      case (null, _, code_immat) if (code_immat != null) =>
+        "Inconnu_connu"
       case _ =>
         "Inconnu"
     }
   }
-  def type_flux(type_flux:String,code_immat:String,categorie_recipient_moyen:String):String={
+
+  def type_flux_intra_flux(type_flux: String, categorie_recipient: String, date_mesure:String, min: String ,max: String): String = {
+    (stripAccents(type_flux), categorie_recipient, date_mesure, min, max) match {
+      case ("Inconnu_connu", categorie_recipient, date_mesure,min,max) if categorie_recipient != null &&
+        categorie_recipient.contains("Bacs ordures menageres") && min<date_mesure && date_mesure<max =>
+        "OM"
+      case ("Inconnu_connu", categorie_recipient, date_mesure,min,max) if categorie_recipient != null &&
+        categorie_recipient.contains("Bacs collecte selective") && min<date_mesure && date_mesure<max =>
+        "CS"
+      case ("Inconnu_connu", categorie_recipient, date_mesure,min,max) if categorie_recipient != null &&
+        categorie_recipient.contains("Bacs verre") && min<date_mesure && date_mesure<max =>
+        "Verre"
+      case ("Inconnu_connu", categorie_recipient, date_mesure,min,max) if categorie_recipient != null &&
+        categorie_recipient.contains("Bacs biodechets") && min<date_mesure && date_mesure<max =>
+        "Biodechets"
+      case ("Inconnu_connu", _, _, _, _) =>
+        "Inconnu"
+      case (type_flux,_,_,_,_) =>
+        type_flux
+    }
+  }
+  def type_flux_post_flux(type_flux:String,code_immat:String,categorie_recipient_moyen:String):String={
     (stripAccents(type_flux),code_immat,categorie_recipient_moyen) match {
-      case (x,_,z) if x.contains("Inconnu_connu") =>
+      case (x,_,z) if x.matches("Inconnu_connu|Inconnu") =>
         if(z==null) {
           "Inconnu"
         }else {
@@ -640,7 +664,6 @@ def log(msg:Any):Unit ={
       case (x,_,_) if (x.matches("Bacs carton|Bacs papier|Composteurs")) =>
         "Autres"
       case _ =>
-        println()
         "Inconnu"
     }
   }
@@ -758,7 +781,7 @@ def log(msg:Any):Unit ={
         OptionToValue(mapMoyenneSansBacRattache.get("BIOglobal"))
      //cas par défaut
       case (typeFlux,litrage_recipient,poids_corr) =>
-        log("cas de redressement non cohérent, Moyenne bac inconnu utilisé \n valeur: typeFlux -> " + typeFlux + " - litrage_recipient -> " + litrage_recipient + " - poids_corr -> " +  poids_corr)
+        //log("cas de redressement non cohérent, Moyenne bac inconnu utilisé \n valeur: typeFlux -> " + typeFlux + " - litrage_recipient -> " + litrage_recipient + " - poids_corr -> " +  poids_corr)
         mapMoyenneBacInconnu.toString
     }
   }
