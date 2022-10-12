@@ -111,11 +111,10 @@ object DechetAnalysis {
     //regroupe les différent type flux par code_immat
     var df_withTypeFlux_temp = df_withTypeFlux.join(df_codeTourneeNull_and_CodeImmatNotNull,Seq("code_immat"),"inner")
       .select("type_flux", "code_immat","code_tournee", "categorie_recipient","date_mesure")
-      .filter(col("type_flux")=!=lit("Inconnu") && col("code_tournee").isNull && col("code_immat").isNotNull)
+      .filter(col("code_tournee").isNull && col("code_immat").isNotNull)
     val df_min_max = df_withTypeFlux_temp.groupBy("code_immat").agg(max("date_mesure") as "date_max", min("date_mesure") as "date_min")
     df_withTypeFlux_temp = df_withTypeFlux_temp.join(df_min_max,Seq("code_immat"),"inner")
     df_withTypeFlux_temp= df_withTypeFlux_temp.withColumn("type_flux",Utils.type_flux_UDF("intra_flux")(col("type_flux"),col("categorie_recipient"),col("date_mesure"),col("date_min"),col("date_max"))) //On affecte a tout les bac pas rattache un type flux correspondant a son code_immat
-      .filter(col("type_flux")=!=lit("Inconnu"))
       .groupBy("type_flux", "code_immat","date_max","date_min").count().orderBy(desc("count"))
       .withColumnRenamed("type_flux","categorie_recipient_moyen")
     import org.apache.spark.sql.expressions.Window
@@ -133,7 +132,7 @@ object DechetAnalysis {
     df_poids_corr
   }
   def redressement_donne_incorrect(df_a_redresser: DataFrame,df_support: DataFrame,df_refBac: DataFrame, spark: SparkSession,dateRef:String,date:String): DataFrame = {
-
+    log("redressement_donne_incorrect")
     // ********** Partie gestion des moyennes des flux sur le même mois de l'année précedente **********
 
     // seuil corrospondant au nombre de valeur qu'il doit y avoir pour avoir un historique valide
@@ -249,8 +248,10 @@ object DechetAnalysis {
       val df_history = spark.read.jdbc(url, s"($req) as temp", connectionProps)
       show(df_history,"df_history")
       //dataframe avec tout les id_bac qui ont 6 valeurs historisé dont on peut se servir pour corriger
-      val df_correction_valide = df_history.groupBy("id_bac").agg(avg("poids") as "avg",count("poids") as "count").filter(s"count==$seuil_historique").drop("count")
+      val df_correction_valide = df_history.groupBy("id_bac").agg(avg("poids") as "avg",count("poids") as "count").filter(s"count==$seuil_historique")//.drop("count")
       show(df_correction_valide,"df_countdf_count_valide")
+      println("AVERAGE = 1 ?")
+      df_correction_valide.filter(col("avg")===lit("1.0") || col("avg")===lit("1")).show()
       //dataframe avec tout les id_bac qui n'ont pas 6 valeurs historisé pour corriger
       val df_correction_invalide = df_history.groupBy("id_bac").count().filter(s"count<$seuil_historique").drop("count")
       show(df_correction_invalide,"df_count_non_valide")
