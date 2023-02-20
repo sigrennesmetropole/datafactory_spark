@@ -34,8 +34,8 @@ object ImportDechetRef {
       Utils.readData(spark, DATE, schema, nameEnv)
     } catch {
       case e: Throwable => {
-        logger.error("Erreur de chargement des fichiers depuis MinIO") 
-        throw new Exception("Erreur de chargement des fichiers depuis MinIO", e)
+        println("Erreur de chargement des fichiers depuis MinIO - stacktrace : \n" + e) //necessaire de print la stack trace pour pouvoir ensuite analyser les logs
+        throw new Exception("Erreur de chargement des fichiers depuis MinIO => ", e)
       } 
     } 
   }

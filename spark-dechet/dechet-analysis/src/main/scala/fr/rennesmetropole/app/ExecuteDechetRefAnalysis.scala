@@ -36,7 +36,6 @@ object ExecuteDechetRefAnalysis {
         throw new Exception("Pas d'arguments", e )
       }
     }
-    log("env : " + System.getenv().toString)
     /** Initialisation de la session spark */
     val spark: SparkSession = SparkSession.builder()
       .appName("Dechet Ref Analysis")
@@ -70,11 +69,8 @@ object ExecuteDechetRefAnalysis {
     var prodAnalyseException = false
     var exception ="";
     var exception_verif ="";
-    val env =if(sys.env.get("ENV")==None)"unknown" else Some(sys.env.get("ENV")).toString()
+    val env =if(sys.env.get("ENV")==None)"unknown" else sys.env.get("ENV").toString()
     try {
-      log("Master :" + spark.sparkContext.master)
-      log("env : " + System.getenv().toString)
-
       //import du dernier referentiel historise
       val df_lastestProducteur = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvProd).repartition(400,col("code_producteur"))
       log("PRODUCTEUR SHOW")
@@ -154,7 +150,7 @@ object ExecuteDechetRefAnalysis {
       }
       //envoie du mail si doublons trouver
       if(exception_verif!=""){
-        val content = mail_template(this.getClass.getName, env,exception_verif)
+        val content = mail_template(this.getClass.getName, env,exception_verif,SYSDATE)
         sendMail(content,"Alerte spark - verif doublons")
       }
 

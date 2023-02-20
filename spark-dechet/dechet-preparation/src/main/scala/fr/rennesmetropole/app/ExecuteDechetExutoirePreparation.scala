@@ -94,7 +94,7 @@ object ExecuteDechetExutoirePreparation {
       }
     } catch {
       case e: Throwable => {
-        logger.error("Echec de la preparation des données exutoires Dechet")
+        println("ERROR : Echec de la preparation des données exutoires Dechet -- " + e)
         throw new Exception("Echec de la preparation des données exutoires Dechet", e)
       }
     }

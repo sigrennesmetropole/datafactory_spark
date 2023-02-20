@@ -158,10 +158,27 @@
             <artifactId>javax.mail</artifactId>
             <version>${version.javax.mail}</version>
         </dependency>
-
-
-
-
+        <!-- Dependance pour le geo spatial avec spark-->
+        <dependency>
+            <groupId>org.apache.sedona</groupId>
+            <artifactId>sedona-python-adapter-3.0_2.12</artifactId>
+            <version>1.2.1-incubating</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.sedona</groupId>
+            <artifactId>sedona-viz-3.0_2.12</artifactId>
+            <version>1.2.1-incubating</version>
+        </dependency>
+        <!-- Optional: https://mvnrepository.com/artifact/org.datasyslab/geotools-wrapper -->
+        <dependency>
+            <groupId>org.datasyslab</groupId>
+            <artifactId>geotools-wrapper</artifactId>
+            <version>1.1.0-25.2</version>
+        </dependency>
+        <dependency><groupId>org.locationtech.jts</groupId>
+            <artifactId>jts-core</artifactId>
+            <version>1.19.0</version>
+        </dependency>
 
     </dependencies>
     <build>
