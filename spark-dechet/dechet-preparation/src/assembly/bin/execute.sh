@@ -63,16 +63,23 @@ else
 printf "${red}Something went wrong, we don't recognize the type of execution you want, you give $TYPE -> we want either collecte or ref ${end}\n"
 exit 0
 fi
-printf "${gre}docker exec ${CONTAINER_SPARK} spark-submit --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file= ${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW  ${end}\n"
-docker exec ${CONTAINER_SPARK} spark-submit --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW 
-
+printf "${gre}docker exec ${CONTAINER_SPARK} spark-submit --master spark://spark:7077  --executor-cores 4 --executor-memory 1G --driver-memory 1G --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW  ${end}\n"
+logs=$(docker exec ${CONTAINER_SPARK} spark-submit --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW) 
+#docker exec ${CONTAINER_SPARK} spark-submit --class $SPARKCLASS --files ${sparkDechetConfigurationPath} --conf spark.driver.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} --conf spark.executor.extraJavaOptions=-Dconfig.file=${sparkDechetConfigurationPath} ${sparkJar} $NOW
 
 result=$?
-
+	printf "result execute : $result \n"
+	printf "logs : $logs \n"
 if [ $result -ne 0 ];
 then
-	printf "${red}Something went wrong, problem when running dechet preparation job ! ${end}\n"
-    exit 1
+
+	printf "${red}Something went wrong, problem when running dechet analysis job ! ${end}\n"
+	if [[ ( $logs == *"Erreur de chargement des fichiers depuis MinIO"* && $logs == *"No such file or directory:"* ) || ( $logs == *"Pas de donne a reprendre"* ) ]]
+	then
+		printf "Probablement pas de données dans minio..."
+		exit 2 #code d'erreur pour signifier que c'est un manque de fichier en entrée
+	fi
+    exit $result
 else
 echo Dechet job has been runned successfuly
 fi

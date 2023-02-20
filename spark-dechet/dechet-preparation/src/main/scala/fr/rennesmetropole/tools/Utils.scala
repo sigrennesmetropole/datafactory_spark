@@ -311,8 +311,7 @@
     }
 
   }
-
-  def regexCharSpe(spark: SparkSession, df_toRename: DataFrame): DataFrame ={
+ def regexCharSpe(spark: SparkSession, df_toRename: DataFrame): DataFrame ={
     val columns = df_toRename.columns //.toString().toUpperCase()
     val regexAlphabet = """[^\w A-Za-z]""" //Search all characters (except alphabet latin)
     val regexSpace = """[\n# $&:\n\t]"""  //Search for white spaces
@@ -327,6 +326,7 @@
     val resultDF2 = spaceColumns.zip(charspeColumns).foldLeft(resultDF){(tempdf, name) => tempdf.withColumnRenamed(name._2.toUpperCase(), name._1)}
     resultDF2
   }
+ 
 
   def lowerCaseAllHeader(spark: SparkSession, df_toRename: DataFrame): DataFrame ={
     val columns = df_toRename.columns //.toString().toUpperCase()

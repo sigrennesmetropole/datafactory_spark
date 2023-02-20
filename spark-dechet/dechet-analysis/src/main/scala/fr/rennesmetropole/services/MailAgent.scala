@@ -79,9 +79,10 @@ object MailAgent {
     }
   }
 
-  def mail_template(jobs:String,environnement:String, body:String): String ={
+  def mail_template(jobs:String,environnement:String, body:String, DATE:String): String ={
     var mail = s"""   /!\\   ALERTE SPARK    /!\\
     Jobs: ${jobs}
+    Date correspondant à l'éxecution: ${DATE}
     Environnement: ${environnement}
     Message : ${body}
     """

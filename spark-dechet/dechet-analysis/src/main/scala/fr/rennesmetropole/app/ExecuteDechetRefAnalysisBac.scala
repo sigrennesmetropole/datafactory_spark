@@ -120,7 +120,7 @@ object ExecuteDechetRefAnalysisBac {
       }
       //envoie du mail si doublons trouver
       if(exception_verif!=""){
-        val content = mail_template(this.getClass.getName, env,exception_verif)
+        val content = mail_template(this.getClass.getName, env,exception_verif,SYSDATE)
         sendMail(content,"Alerte spark - verif doublons")
       }
 

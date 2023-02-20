@@ -314,7 +314,7 @@ def log(msg:Any):Unit ={
     log("Donnee ecrite dans la base de donnees postgres")
   }
 
-      /** 
+  /** 
     * Supprime la partition par rapport à la table et la date en entrée
     * @param table_name : Nom de la table
     * @param pgUrl      : l'url de postgresql
@@ -407,11 +407,12 @@ def log(msg:Any):Unit ={
       .write.options(Map("header"->"true", "delimiter"->";","compression"->"gzip"))
       .mode(SaveMode.Append)
       .csv(Utils.tableVar(nameEnv,"analysed_bucket") + postURL)
-
+    log("Ecritures des fichiers csv fait")
     df_toWrite.repartition(2)   // nécessaire pour écrire le DF dans un seul csv, mais pPeut poser problème si le DF est trop gros
       .write
       .mode(SaveMode.Append)
       .orc(Utils.tableVar(nameEnv,"analysed_bucket") + postURL+"orc/")
+    log("Ecritures des fichiers orc fait")
 
     if("tableProducteur".equals(nameEnv) || "tableRecipient".equals(nameEnv) ) {
 
@@ -837,5 +838,70 @@ def log(msg:Any):Unit ={
         list =list :+ current.getString("name")
       }
     list
+  }
+
+  /**
+   *
+   * @param spark   : La session spark
+   * @param pgUrl   : l'url de postgresql
+   * @param pgTable : le nom de la table a lire dans postres
+   */
+  def readFomPostgres(spark: SparkSession, pgUrl: String, pgTable: String): DataFrame = {
+    if (Utils.envVar("TEST_MODE") == "False") {
+      spark.read
+        .format("jdbc")
+        .option("url", pgUrl)
+        .option("dbtable", pgTable)
+        .option("user", Utils.envVar("POSTGRES_ACCESS_KEY"))
+        .option("password", Utils.envVar("POSTGRES_SECRET_KEY"))
+        .load()
+    }
+    else {
+      pgTable match {
+        case "dwh.commune_emprise" =>
+          val schemaInput = StructType(
+            List(
+              StructField("objectid", IntegerType, false),
+              StructField("code_insee", IntegerType, false),
+              StructField("nom", StringType, true),
+              StructField("commune_agglo", ShortType, true),
+              StructField("x_centrbrg", DoubleType, false),
+              StructField("y_centrbrg", DoubleType, true),
+              StructField("code_postale", StringType, true),
+              StructField("shape", StringType, true)
+            )
+          )
+          spark
+            .read
+            .option("header", "true")
+            .format("csv")
+            .schema(schemaInput) // mandatory
+            .option("delimiter", ";")
+            .load(tableVar("test", "READ_POSTGRES_EMRPISE"))
+        case "dwh.quartier" =>
+          val schemaInput = StructType(
+            List(
+              StructField("objectid", IntegerType, false),
+              StructField("matricule", StringType, false),
+              StructField("nuquart", ShortType, true),
+              StructField("nmquart", StringType, true),
+              StructField("numnom", StringType, false),
+              StructField("nom", StringType, true),
+              StructField("shape", StringType, true),
+              StructField("code_insee", IntegerType, true),
+              StructField("perimetre_geo", DoubleType, true),
+              StructField("air_geo", DoubleType, true)
+            )
+          )
+          spark
+            .read
+            .option("header", "true")
+            .format("csv")
+            .schema(schemaInput) // mandatory
+            .option("delimiter", ";")
+            .load(tableVar("test", "READ_POSTGRES_QUARTIER"))
+      }
+
+    }
   }
 }

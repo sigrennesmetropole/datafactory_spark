@@ -14,8 +14,8 @@ object UDF {
             valeur.toInt
           }
         }catch{
-             case e : Throwable => 
-             println("ERREUR, essaie de transformer "+valeur+" en Int \n" +e)
+             case e : Throwable =>
+             //println("ERREUR, essaie de transformer "+valeur+" en Int \n" +e)
              null.asInstanceOf[Int]
         }
     }

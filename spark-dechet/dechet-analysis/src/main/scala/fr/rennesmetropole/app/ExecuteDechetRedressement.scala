@@ -7,6 +7,10 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 
 import java.time.Instant
 import fr.rennesmetropole.tools.Utils.log
+import org.apache.sedona.core.serde.SedonaKryoRegistrator
+import org.apache.sedona.viz.core.Serde.SedonaVizKryoRegistrator
+import org.apache.sedona.viz.sql.utils.SedonaVizRegistrator
+import org.apache.spark.serializer.KryoSerializer
 import org.apache.spark.sql.functions.{col, date_format}
 object ExecuteDechetRedressement {
   def main(args: Array[String]): Either[Unit, DataFrame] = {
@@ -33,8 +37,14 @@ object ExecuteDechetRedressement {
     val spark: SparkSession = SparkSession.builder()
       .appName("Dechet Analysis")
       .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+      .config("spark.sql.broadcastTimeout", "600")
+      .config("spark.kryo.registrator", "org.apache.sedona.core.serde.SedonaKryoRegistrator")
+      .config("spark.serializer", classOf[KryoSerializer].getName) // org.apache.spark.serializer.KryoSerializer
+      .config("spark.kryo.registrator", classOf[SedonaVizKryoRegistrator].getName) // org.apache.sedona.viz.core.Serde.SedonaVizKryoRegistrator
       .getOrCreate()
-
+    import org.apache.sedona.sql.utils.SedonaSQLRegistrator
+    SedonaSQLRegistrator.registerAll(spark)
+    SedonaVizRegistrator.registerAll(spark)
     /** Chargement des paramètres Hadoop à partir des propriétés système */
     spark.sparkContext
       .hadoopConfiguration
@@ -52,33 +62,57 @@ object ExecuteDechetRedressement {
       .hadoopConfiguration
       .set("fs.s3.aws.credentials.provider", "org.apache.hadoop.fs.s3native.NativeS3FileSystem")
 
+    spark.conf.set("spark.sql.adaptive.enabled", true)
+    spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", true)
+    spark.conf.set("spark.sql.adaptive.skewJoin.enabled",true)
+
+
     val nameEnv = "tableCollecte"
     val nameEnvRecip = "tableRecipient"
     var exception = ""
+    var df_redresse_spatial = spark.emptyDataFrame
     try {
-      //Import des referentiels Bacs
+      //Import des referentiels BacsreadLastestReferential
       val df_lastestBac = ImportDechet.readLastestReferential(spark, SYSDATE, nameEnvRecip)
       //Import des données a redresser
       val (df_support, df_a_redresser,dateRef)= ImportDechet.importRedressement(spark,SYSDATE,nameEnv)
       show(df_support,"df_support")
       show(df_a_redresser,"df_a_redresser")
-      //Redressement des données
-      val df_redresse = DechetAnalysis.redressement_donne_incorrect(df_a_redresser,df_support,df_lastestBac,spark,dateRef,SYSDATE)
+      if(!df_a_redresser.head(1).isEmpty){
+        //Redressement des données
+        log("Redressement du poids des données déchets")
+        val df_redresse = DechetAnalysis.redressement_donne_incorrect(df_a_redresser, df_support, df_lastestBac, spark, dateRef, SYSDATE)
 
-      if (df_redresse.head(1).isEmpty) {
-        exception = exception + "Pas de données collecte redresse a écrire dans minio, arrêt de la chaine de traitement... \n"
+        if (df_redresse.head(1).isEmpty) {
+          exception = exception + "Pas de données collecte redresse a écrire dans minio, arrêt de la chaine de traitement... \n"
+        }else{
+            log("Redressement des données spatial des données déchets")
+            val commune_emprise = Utils.readFomPostgres(spark, Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_COMMUNE_EMPRISE"))
+            val quartier = Utils.readFomPostgres(spark, Utils.envVar("POSTGRES_URL"), Utils.envVar("POSTGRES_TABLE_QUARTIER"))
+            df_redresse_spatial = DechetAnalysis.redressement_donne_spatial(df_redresse, commune_emprise, quartier, spark, SYSDATE)
+            if (df_redresse_spatial.head(1).isEmpty) {
+              exception = exception + "Pas de données collecte spatiale a écrire dans minio, arrêt de la chaine de traitement... \n"
+            }
+          }
+        if (exception != "" && Utils.envVar("TEST_MODE") == "False") {
+          logger.error("exception :" + exception)
+          throw new Exception(exception)
+        }
+        if (Utils.envVar("TEST_MODE") == "False") {
+          Left(Utils.writeToS3(spark, df_redresse_spatial, nameEnv, SYSDATE))
+        }
+      }
+      else{
+        throw new Exception("Pas de données à redresser, erreur lors de l'import des données ou pas de donné dans minio.")
       }
       logger.error("exception :" + exception)
       if (exception != "" && Utils.envVar("TEST_MODE") == "False") {
         throw new Exception(exception)
+      } else {
+        Right(df_redresse_spatial)
       }
 
-      if (Utils.envVar("TEST_MODE") == "False" && (!df_redresse.head(1).isEmpty)) {
-        Left(Utils.writeToS3(spark, df_redresse, nameEnv, SYSDATE))
-      }
-      else {
-        Right(df_redresse)
-      }
+
     } catch {
       case e: Throwable => {
         logger.error("Echec du traitement de redresseement des Dechets")

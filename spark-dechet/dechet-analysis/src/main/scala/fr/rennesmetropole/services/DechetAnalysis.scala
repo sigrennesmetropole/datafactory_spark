@@ -11,6 +11,7 @@ import java.sql.Timestamp
 import java.time.Instant
 import java.util.Properties
 import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.sedona_sql.expressions.{ST_Contains, ST_Point, ST_SRID, ST_Transform}
 
 object DechetAnalysis {
   val frTZ = java.time.ZoneId.of("Europe/Paris")
@@ -98,6 +99,14 @@ object DechetAnalysis {
       spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
     }
   }
+
+  /**
+   * Redressement des poids des données de collecte déchets
+   * @param df_raw  dataframe avec les données a corriger
+   * @param spark spark session
+   * @param date  date qui correspond aux données a corriger
+   * @return
+   */
   def redressement_donne(df_raw: DataFrame, spark: SparkSession,date:String): DataFrame = {
   // on identifie les type de flux
     var df_withTypeFlux = df_raw.withColumn("type_flux",Utils.type_flux_UDF("pre_flux")(df_raw("categorie_recipient"),df_raw("code_tournee"),df_raw("code_immat")))
@@ -131,6 +140,17 @@ object DechetAnalysis {
     show(df_poids_corr,"df_poids_corr")
     df_poids_corr
   }
+
+  /**
+   * Correction des poids qui sont mauvais
+   * @param df_a_redresser  dataframe contenant les poids a corriger
+   * @param df_support  dataframe contenant des valeurs de référence qui vont permette la correction (valeur de l'année précédente)
+   * @param df_refBac   dataframe contenant le référentiel courant des bacs
+   * @param spark   spark session
+   * @param dateRef   date YYYY-MM correspondant aux valeurs de df_support
+   * @param date    date des données qui sont actuellement corrigé
+   * @return
+   */
   def redressement_donne_incorrect(df_a_redresser: DataFrame,df_support: DataFrame,df_refBac: DataFrame, spark: SparkSession,dateRef:String,date:String): DataFrame = {
     log("redressement_donne_incorrect")
     // ********** Partie gestion des moyennes des flux sur le même mois de l'année précedente **********
@@ -272,6 +292,118 @@ object DechetAnalysis {
     }
 
   }
+
+  /**
+   *
+   * @param df_raw    dataframe a corriger
+   * @param spark   spark session
+   * @param date    date des données qui sont actuellement corrigé
+   * @return
+   */
+  def redressement_donne_spatial(df_raw: DataFrame, df_communeEmprise: DataFrame, df_quartier: DataFrame, spark: SparkSession,date:String): DataFrame = {
+
+    //cast des colonnes longitude et latitude en double pour pouvoir créer un Point spatial a partir des données
+    val df_raw_casted = df_raw.withColumn("longitude",col("longitude").cast(DoubleType)).withColumn("latitude",col("latitude").cast(DoubleType))
+      .withColumn("code_quartier",lit(null))
+    // Créer une view a partir de la table df_communeEmprise, ce qui la rendera disponible dans la requête spark.sql
+    df_communeEmprise.createOrReplaceTempView("raw_communeEmprise")
+
+    // Requête qui permet de cast la colonne contenant les données spatial en type "geometry" pour pouboir être manipuler par la suite
+    var df_communeEmprise_casted = spark.sql(
+      """
+        |SELECT objectid, code_insee, nom,commune_agglo, x_centrbrg, y_centrbrg, code_postal, ST_GeomFromWKB(shape) AS castedshape
+        |FROM raw_communeEmprise
+      """.stripMargin).cache()
+
+    // Créer des view a partir des tables pour les rendre disponible dans la requête spark.sql
+    df_communeEmprise_casted.createOrReplaceTempView("commune_emprise")
+    df_raw_casted.createOrReplaceTempView("fac_dechets")
+
+    val df_with_code_insee = spark.sql(
+      s"""
+         |SELECT /*+ BROADCAST(ce) */ date_mesure, code_puce, id_bac, code_tournee, code_immat, poids, poids_corr, latitude, longitude, date_crea, date_modif, year, month, day, ce.code_insee, code_quartier
+         |FROM fac_dechets
+         |LEFT JOIN commune_emprise ce
+         |ON
+         | ST_CONTAINS(castedshape, ST_TRANSFORM(ST_SETSRID(ST_POINT(latitude,longitude), 4326),'epsg:4326','epsg:3948')) AND
+         | ST_INTERSECTS(castedshape, ST_TRANSFORM(ST_SETSRID(ST_POINT(latitude,longitude), 4326), 'epsg:4326','epsg:3948'))
+         | AND commune_agglo = 1
+         |order by date_mesure desc;
+         |""".stripMargin)
+    show(df_with_code_insee,"df_with_code_insee")
+
+
+    //reconstruction des points et de la transformation a partir du nouveau dataframe avec les code_insee
+    //TODO a voir comment optimiser, dès le début on fait avec L'API dataframe ou on optimise le calcul des points après seulement sur ceux hors RM ou on les gardes dans la requête SQL
+    var df_dechet = df_with_code_insee
+                    .withColumn("point", call_udf("ST_POINT", col("latitude"),col("longitude")))
+    df_dechet = df_dechet.withColumn("point", call_udf("ST_POINT", col("latitude"), col("longitude")))
+    df_dechet = df_dechet.withColumn("Point_withSRID", call_udf("ST_SETSRID", col("point"),lit(4326)))
+    df_dechet = df_dechet.withColumn("transformed", call_udf("ST_TRANSFORM", col("Point_withSRID"), lit("epsg:4326"), lit("epsg:3948")))
+
+    val newDfDechet = df_dechet.drop(df_dechet("point"))
+                               .drop(df_dechet("Point_withSRID"))
+    val dfPoint = newDfDechet.filter(col("code_insee").isNull).select("transformed");
+
+    var dfCross = dfPoint.crossJoin(broadcast(df_communeEmprise_casted).filter(col("commune_agglo") === 1));
+    dfCross = dfCross.withColumn("distance", call_udf("ST_DISTANCE", col("castedshape"),
+      col("transformed")))
+      .drop("castedshape")
+    val windowMin = Window.partitionBy("transformed").orderBy(col("distance").asc)
+    val df_min = dfCross.withColumn("rowMin",row_number.over(windowMin))
+      .where(col("rowMin") === 1)
+      .drop("rowMin")
+
+
+    val df_all_commune = newDfDechet.join(broadcast(df_min),Seq("transformed"),"left")
+      .withColumn("code_insee_bis",when(newDfDechet("code_insee").isNull,df_min("code_insee")).otherwise(newDfDechet("code_insee")))
+      .drop("objectid")
+      .drop("nom")
+      .drop("commune_agglo")
+      .drop("x_centrbrg")
+      .drop("y_centrbrg")
+      .drop("code_postal")
+      .drop("distance")
+      .drop(df_min("code_insee"))
+      .drop(newDfDechet("code_insee"))
+      .withColumnRenamed("code_insee_bis","code_insee")
+    log("fin code_insee")
+    show(df_all_commune,"df_all_commune")
+
+    //Partie quartier
+    // Créer une view a partir de la table df_quartier, ce qui la rendera disponible dans la requête spark.sql
+    df_quartier.createOrReplaceTempView("raw_quartier")
+    // Requête qui permet de cast la colonne contenant les données spatial en type "geometry" pour pouboir être manipuler par la suite
+    var df_quartier_casted = spark.sql(
+      """
+        |SELECT objectid, matricule, nuquart,nmquart, numnom, nom, ST_GeomFromWKB(shape) AS castedshape, code_insee, perimetre_geo, aire_geo
+        |FROM raw_quartier
+       """.stripMargin)
+
+    // Créer des view a partir des tables pour les rendre disponible dans la requête spark.sql
+    df_quartier_casted.createOrReplaceTempView("quartier")
+    //df_with_code_insee devient le nouveau fac_dechets avec les données a jour
+    df_all_commune.createOrReplaceTempView("fac_dechets")
+
+
+    //  Requête qui va récupéré les quartiers
+    //  et retourne ensuite le dataframe des données redressé avec toutes les quartiers
+    val df_with_code_insee_quartier = spark.sql(
+      s"""
+         |SELECT /*+ BROADCAST(q) */  date_mesure, code_puce, id_bac, code_tournee, code_immat, poids, poids_corr, latitude, longitude, date_crea, date_modif, year, month, day, fac_dechets.code_insee, q.nuquart as code_quartier
+         |FROM fac_dechets
+         |LEFT JOIN quartier q
+         |ON
+         | ST_CONTAINS(castedshape, ST_TRANSFORM(ST_SETSRID(ST_POINT(latitude,longitude), 4326),'epsg:4326','epsg:3948')) AND
+         | ST_INTERSECTS(castedshape, ST_TRANSFORM(ST_SETSRID(ST_POINT(latitude,longitude), 4326), 'epsg:4326','epsg:3948'))
+         | AND code_quartier IS NULL
+         |order by date_mesure desc;
+         |""".stripMargin)
+    show(df_with_code_insee_quartier,"df_with_code_insee_quartier")
+    df_with_code_insee_quartier
+  }
+
+
   def prepareIncomingProducteurDf(df_raw: DataFrame, spark: SparkSession): DataFrame = {
     try{
       val df = df_raw
