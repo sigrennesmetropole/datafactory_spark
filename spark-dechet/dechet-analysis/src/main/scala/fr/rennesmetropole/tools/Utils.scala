@@ -4,6 +4,7 @@ import com.typesafe.config.{Config, ConfigFactory}
 import fr.rennesmetropole.services.DechetAnalysis.typeFrequence
 import fr.rennesmetropole.services.ImportDechet.{createEmptyBacDataFrame, createEmptyCollecteDataFrame, createEmptyExutoireDataFrame, createEmptyProducteurDataFrame}
 import org.apache.commons.lang3.StringUtils.stripAccents
+import org.apache.hadoop.fs.Path
 import org.apache.spark.sql._
 import org.apache.spark.sql.expressions.UserDefinedFunction
 import org.apache.spark.sql.functions._
@@ -167,10 +168,26 @@ def log(msg:Any):Unit ={
               .read
               .orc(URL + postURL)
           case "smart_orc" =>
+             val fromFolder = {
+              println("Reading smart data from : " + URL + postURL)
+              new Path(URL + postURL)
+            }
+            val conf = spark.sparkContext.hadoopConfiguration
+            val logfiles = fromFolder.getFileSystem(conf)
+              .listFiles(fromFolder, true)
+            var files = Seq[String]()
+            while (logfiles.hasNext) {
+              // one can filter here some specific files
+              files = files :+ logfiles.next().getPath().toString
+            }
+            files = files.filter(s => s.contains(".orc"))
+            //affiche le nombre de fichier trouvé
+            println("number of files read : " + files.length)
+            //affiche le path de tout les fichier trouvé
+            println(files.mkString("-"))
             spark
               .read
-              .orc(URL + postURL +"/orc")
-
+              .orc(files:_*)
         }
       } catch {
         case e: Throwable =>

@@ -24,10 +24,10 @@ object DechetRefPreparation {
     var df_typed = spark.createDataFrame(spark.sparkContext.emptyRDD[Row],schema)
     println("SCHEMA DF TYPED")
     df_typed.printSchema
+    val(mapNbtoName,mapNametoParam) = Utils.getMap(spark,nameEnv)
     if(Utils.tableVar(nameEnv,"header") == "False"){ // On regarde si la table possede un header
       //recuperation des parametres depuis le fichier de conf
       println("getMap" + nameEnv)
-      val(mapNbtoName,mapNametoParam) = Utils.getMap(spark,nameEnv)
       print(" map :"+ mapNbtoName.mkString(","))
       df_imported = Utils.renommageColonnes(spark,df_raw_producteur,mapNbtoName)
       println("renommage : ")
@@ -40,6 +40,10 @@ object DechetRefPreparation {
       df_imported.show()
       // On met tous les caracteres en minuscule
       df_imported = Utils.lowerCaseAllHeader(spark, df_imported)
+      val df_cast = Utils.castDF(spark, df_imported, nameEnv, mapNametoParam)
+      val sortedList = mapNbtoName.toSeq.sortWith((s1, s2) => Utils.sort(s1._1, s2._1))
+      val values = sortedList.unzip._2
+      df_imported = df_cast.select(values.head, values.tail: _*)
     }
 
     // try{
@@ -51,8 +55,8 @@ object DechetRefPreparation {
     //   df_typed
     // }
       val df_prepared = nameEnv match {
-      case "tableProducteur" => preparationProducteur(df_imported, df_typed) 
-      case "tableRecipient" => preparationRecipent(df_imported, df_typed) 
+      case "tableProducteur" => preparationProducteur(df_imported, df_typed)
+      case "tableRecipient" => preparationRecipent(df_imported, df_typed)
       }
       println("DONNEES PREPARE")
       df_prepared.show
